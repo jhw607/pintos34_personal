@@ -110,6 +110,17 @@ struct thread {
 	int nice;
 	int recent_cpu;
 
+	/* --- Project2: User programs - system call --- */
+	int exit_status; // _exit(), _wait() 구현 때 사용
+	
+	/* project 2 */
+	struct list child_list; // _fork(), wait() 구현 때 사용
+    struct list_elem child_elem; // _fork(), _wait() 구현 때 사용
+    struct intr_frame parent_if; // _fork() 구현 때 사용, __do_fork() 함수
+
+	
+
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */

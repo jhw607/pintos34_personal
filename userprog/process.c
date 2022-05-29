@@ -84,6 +84,19 @@ initd (void *f_name) {
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
+	// struct thread *parent = thread_current();
+	// memcpy(&parent->parent_if, if_, sizeof(struct intr_frame)); // 현재 스레드의 intr_frame 구조체, intr_frame 구조체 바로 받아오기 &, 무슨 차이지?
+	
+	// tid_t pid = thread_create(name, PRI_DEFAULT, __do_fork, parent);
+
+	// if (pid == TID_ERROR){
+	// 	return TID_ERROR;
+	// }
+
+	// /* project 2 : Process Structure */
+	// struct thread *child = get_child(pid);
+
+
 	return thread_create (name,
 			PRI_DEFAULT, __do_fork, thread_current ());
 }
@@ -761,3 +774,19 @@ setup_stack (struct intr_frame *if_) {
 #endif /* VM */
 
 
+// /* Project 2 : Process Structure */
+
+// struct thread * get_child(int pid){
+
+// 	struct thread *cur = thread_current();
+// 	struct list *child_list = &cur->child_list;
+// 	struct list_elem *e;
+
+// 	for (e = list_begin (child_list); e != list_end (child_list); e = list_next (e)){
+// 		struct thread *t = list_entry(e, struct thread, child_elem);
+// 		if (t->tid == pid){
+// 			return t; // 자식 스레드 반환
+// 		}	
+// 	}
+// 	return NULL;
+// }
