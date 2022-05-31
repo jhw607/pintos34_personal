@@ -86,14 +86,14 @@ initd (void *f_name) {
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
-	printf("fork start\n");
+	// printf("fork start\n");
 	struct thread *parent = thread_current();
 	memcpy(&parent->parent_if, if_, sizeof(struct intr_frame)); // 현재 스레드의 intr_frame 구조체, intr_frame 구조체 바로 받아오기 &, 무슨 차이지?
 																
 	
-	printf("thread_create start\n");
+	// printf("thread_create start\n");
 	tid_t pid = thread_create(name, PRI_DEFAULT, __do_fork, parent); // 순서 물어보기
-	printf("thread_create end\n");
+	// printf("thread_create end\n");
 	
 	if (pid == TID_ERROR){
 		return TID_ERROR;
@@ -101,9 +101,14 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 
 	/* project 2 : Process Structure */
 	struct thread *child = get_child(pid);
-	printf("sema_down start\n");
+	// printf("sema_down start\n");
 	sema_down(&child->fork_sema);
-	printf("sema_down end\n");
+	// printf("sema_down end\n");
+
+	// fork 오류나서 추가한 부분(debug)
+	if (child->exit_status == -1)
+		return TID_ERROR;
+
 
 	return pid;
 }
@@ -156,7 +161,7 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) { //부모 page table을 복�
 		// va = 부모 가상 주소, newpage = 부모 가상 주소를 복사했지만 자식 주소, current->pml4 = 자식 물리주소겠지 
 		// va의 역할은 뭐지 ? 
 		/* 6. TODO: if fail to insert page, do error handling. */
-		printf("Failed to map user virtual page to given physical frame\n"); // #ifdef DEBUG
+		// printf("Failed to map user virtual page to given physical frame\n"); // #ifdef DEBUG
 		return false;
 	}
 	return true;
@@ -169,13 +174,18 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) { //부모 page table을 복�
  *       this function. */
 static void
 __do_fork (void *aux) {
-	printf("do_fork start\n");
+	// printf("do_fork start\n");
 	struct intr_frame if_;
 	struct thread *parent = (struct thread *) aux;
 	struct thread *current = thread_current ();
 	/* TODO: somehow pass the parent_if. (i.e. process_fork()'s if_) */
 	struct intr_frame *parent_if;
 	bool succ = true;
+
+	/* process_fork에서 복사 해두었던 intr_frame */
+	/* debug */
+	parent_if = &parent->parent_if;
+
 
 	/* 1. Read the cpu context to local stack. */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
