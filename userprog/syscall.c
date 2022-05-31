@@ -18,6 +18,31 @@
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
+/* Syscall function */
+void halt(void);
+void exit(int status);
+bool create(const char *file, unsigned inital_size);
+bool remove(const char *file);
+tid_t fork (const char *thread_name, struct intr_frame *f);
+tid_t exec(char *file_name);
+int wait(tid_t pid);
+int open(const char *file);
+int filesize(int fd);
+int read(int fd, void *buffer, unsigned size);
+int write(int fd, void *buffer, unsigned size);
+void seek(int fd, unsigned position);
+unsigned tell(int fd);
+void close(int fd);
+
+
+/* Syscall helper Functions */
+static struct file *find_file_by_fd(int fd);
+int add_file_to_fdt(struct file *file);
+void remove_file_from_fdt(int fd);
+
+
+
+
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -42,6 +67,9 @@ syscall_init (void) {
 	 * mode stack. Therefore, we masked the FLAG_FL. */
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+	
+	/* 파일 사용 시 lock 초기화 */
+	lock_init(&filesys_lock);
 }
 
 /* The main system call interface */
@@ -52,15 +80,15 @@ syscall_handler (struct intr_frame *f UNUSED) {
 	switch (sys_number){
 
 		case SYS_HALT:			/* Halt the operating system. */
-			 halt();
-			 break;
+			halt();
+			break;
 		
 		case SYS_EXIT:			/* Terminate this process. */
 			exit(f->R.rdi);
 			break;
 
 		case SYS_FORK:			/* Clone current process. */
-			fork(f->R.rdi, f);
+			f->R.rax = fork(f->R.rdi, f);
 			break;
 			                    
 		case SYS_EXEC:			/* Switch current process. */
@@ -69,51 +97,52 @@ syscall_handler (struct intr_frame *f UNUSED) {
            	 break;
 	
 		case SYS_WAIT:			/* Wait for a child process to die. */
-			 wait(f->R.rdi);
+			 f->R.rax = wait(f->R.rdi);
 			 break; 
 
-	    // case SYS_CREATE:		/* Create a file. */
-		// 	 create(f->R.rdi, f->R.rsi);
-		// 	 break;
+	    case SYS_CREATE:		/* Create a file. */
+			 f->R.rax = create(f->R.rdi, f->R.rsi);
+			 break;
 
-		// case SYS_REMOVE:		/* Delete a file. */
-		// 	 remove(f->R.rdi, f->R.rsi);
-		// 	 break;
+		case SYS_REMOVE:		/* Delete a file. */
+			 f->R.rax = remove(f->R.rdi);
+			 break;
 
-		// case SYS_OPEN:			/* Open a file. */
-		// 	 open(f->R.rdi);
-		// 	 break;	              
+		case SYS_OPEN:			/* Open a file. */
+			 f->R.rax = open(f->R.rdi);
+			 break;	              
 	               
-        // case SYS_FILESIZE: 		/* Obtain a file's size. */
-		// 	 filesize(f->R.rdi);
-		// 	 break;
+        case SYS_FILESIZE: 		/* Obtain a file's size. */
+			 f->R.rax = filesize(f->R.rdi);
+			 break;
 
-	    // case SYS_READ:			/* Read from a file. */
-		// 	 read(f->R.rdi, f->R.rsi, f->R.rdx);
-		// 	 break;
+	    case SYS_READ:			/* Read from a file. */
+			 f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
+			 break;
 	
 		case SYS_WRITE:			/* Write to a file. */
-			 write(f->R.rdi, f->R.rsi, f->R.rdx);
+			 f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 			 break;
 	                   
-		// case SYS_SEEK:			/* Change position in a file. */
-		// 	 seek(f->R.rdi, f->R.rdx);
-		// 	 break;
+		case SYS_SEEK:			/* Change position in a file. */
+			 seek(f->R.rdi, f->R.rdx);
+			 break;
 	                  
-        // case SYS_TELL:			/* Report current position in a file. */
-		//   tell(f->R.rdi);
-		// 	 break;
+        case SYS_TELL:			/* Report current position in a file. */
+			 f->R.rax = tell(f->R.rdi);
+			 break;
 	                   
-		// case SYS_CLOSE:			/* Close a file. */
-		// 	 close(f->R.rdi);
-		// 	 break;
-		                 
+		case SYS_CLOSE:			/* Close a file. */
+			 close(f->R.rdi);
+			 break;
 
+		default:
+			printf ("system call!\n");
+			thread_exit ();
+			break;
+		            
 	}
-
 	
-	printf ("system call!\n");
-	thread_exit ();
 }
 
 
@@ -211,17 +240,31 @@ static struct file *find_file_by_fd(int fd)
 	return cur->fd_table[fd];
 }
 
-// int add_file_to_fdt(struct file *file)
-// {
-// 	struct thread *cur = thread_current();
-// 	struct file **fdt = cur->fd_table;
+/* 
+파일 객체(struct File)를 File Descriptor 테이블에 추가
+파일 객체의 File Descriptor 반환
+*/
+int add_file_to_fdt(struct file *file)	
+{
+	
+	struct thread *cur = thread_current();
+	struct file **fdt = cur->fd_table;
+	int fd = cur->fd_idx; // fd값은 2부터 출발
 
-// 	for (i = 2; i)
-// 	cur->fd_table
+	while (fdt[fd] != NULL && fd < FDCOUNT_LIMIT)
+	{
+		fd++;
+	}
 
-// 	return fd;
+	if (fd >= FDCOUNT_LIMIT)
+		return -1;
+	
 
-// }
+	fdt[fd] = file; 
+	// cur->fd_idx = cur->fd_idx + 1;	
+	return fd;
+
+}
 
 void remove_file_from_fdt(int fd)
 {
@@ -232,4 +275,170 @@ void remove_file_from_fdt(int fd)
 
 	cur->fd_table[fd] = NULL;
 
+}
+/*
+open(file) -> filesys_open(file) -> file_open(inode) -> file
+open 함수 실행 -> filesys_open을 통해서 file open 함수에 inode를 넣고 실행하여 file을 반환받음
+inode는 우리가 입력한 파일 이름을 컴퓨터가 알고 있는 파일이름으로 바꾸는 과정
+file_obj = file이 되고, 이를 현재 스레드 파일 디스크립터 테이블에 추가하여 관리할 수 있게함
+*/
+int open(const char *file) // 파일 객체에 대한 파일 디스크립터 부여
+{
+	check_address(file);
+	lock_acquire(&filesys_lock);
+
+	struct file *file_obj = filesys_open(file);
+
+	if (file_obj == NULL){
+		return -1;
+	}
+
+	int fd = add_file_to_fdt(file_obj); 
+
+	/* 파일 디스크립터가 가득 찬 경우 */
+	if(fd==-1){
+		file_close(file_obj);
+	}
+
+	lock_release(&filesys_lock);
+	return fd;
+
+}
+
+/* 파일이 열려있다면 바이트 반환, 없다면 -1 반환 */
+int filesize(int fd)
+{
+	struct file *file_obj = find_file_by_fd(fd);
+	
+	if (file_obj == NULL){
+		return -1;
+	}
+	return file_length(file_obj);
+
+}
+
+/*
+열린 파일의 데이터를 읽는 시스템 콜
+- 파일에 동시 접근이 일어날 수 있으므로 Lock 사용 
+- 파일 디스크립터를 이용하여 파일 객체 검색
+- 파일 디스크립터가 0일 경우 키보드에 입력을 버퍼에 저장 후, 버퍼의 저장한 크기를 리턴 (input_getc() 이용)
+- 파일 디스크립터가 0이 아닐 경우 파일의 데이터를 크기만큼 저장 후 읽은 바이트 수를 리턴
+
+참고 :
+NULL : 널 포인터 0x00000000 : 값이 없다, 비어 있다 의미 : pointer(void * ) 0
+0 : 정수 0 : int
+-> 포인터에서는 NULL, 0 같이 쓰인다!
+*/
+
+int read(int fd, void *buffer, unsigned size)
+{
+	check_address(buffer);
+	int read_count; // 글자수 카운트 용(for문 사용하기 위해)
+	struct thread *cur = thread_current();
+	struct file *file_obj = find_file_by_fd(fd);
+	unsigned char *buf = buffer;
+
+	if (file_obj == NULL)
+		return -1;
+	
+	/* STDIN일 때 */
+	if(fd == 0)
+	{
+		char key;
+		for (int read_count = 0;read_count < size; read_count++){
+			key = input_getc();
+			*buf++ = key;
+			if (key == '\0'){
+				break;
+			}
+		}
+		
+	}
+	/* STDOUT일 때 : -1 반환 */
+	else if (fd == 1)
+	{
+		return -1;
+	}
+	
+	else {
+			lock_acquire(&filesys_lock);
+			read_count = file_read(file_obj,buffer, size); // 여기서만 lock을 이용하는 이유?, 키보드 입력 받을 때는 왜 안하는지?
+			lock_release(&filesys_lock);
+	}
+
+	return read_count;
+
+
+}
+
+int write(int fd, void *buffer, unsigned size)
+{
+	check_address(buffer);
+	int read_count; // 글자수 카운트 용(for문 사용하기 위해)
+	struct file *file_obj = find_file_by_fd(fd);
+	unsigned char *buf = buffer;
+
+	if (file_obj == NULL)
+		return -1;
+	
+	/* STDOUT일 때 */
+	if(fd == 1)
+	{
+		putbuf(buffer, size);
+		read_count = size;
+		
+	}
+	/* STDIN일 때 : -1 반환 */
+	else if (fd == 0)
+	{
+		return -1;
+	}
+	
+	else {
+			lock_acquire(&filesys_lock);
+			read_count = file_write(file_obj,buffer, size);
+			lock_release(&filesys_lock);
+	}
+
+	return read_count;
+
+}
+
+void seek(int fd, unsigned position)
+{
+	if(fd < 2){	// 초기값 2로 설정. 0:표준입력, 1:표준출력
+		return;
+	}
+	struct file *file_obj = find_file_by_fd(fd);
+	check_address(file_obj);
+	if(file_obj == NULL){
+		return;
+	}
+	file_seek(file_obj, position);
+
+}
+
+unsigned tell(int fd)
+{
+	if(fd < 2){	// 초기값 2로 설정. 0:표준입력, 1:표준출력
+		return;
+	}
+	struct file *file_obj = find_file_by_fd(fd);
+	check_address(file_obj);
+	if(file_obj == NULL){
+		return;
+	}
+	return file_tell(fd);
+
+}
+
+void close(int fd)
+{
+	struct file *file_obj = find_file_by_fd(fd);
+	if (file_obj == NULL)
+	{
+		return;
+	}
+
+	remove_file_from_fdt(fd);
 }
