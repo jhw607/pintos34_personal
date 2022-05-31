@@ -5,8 +5,13 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+/* project 2 : process structure semaphore 추가 */
+#include "threads/synch.h"
 #ifdef VM
 #include "vm/vm.h"
+
+
+
 #endif
 
 
@@ -28,7 +33,10 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
-
+/* ------------------ project2 -------------------- */
+#define FDT_PAGES 3		/* pages to allocate for file descriptor tables (thread_create, process_exit) */
+#define FDCOUNT_LIMIT FDT_PAGES *(1 << 9)		/* limit fd_idx */
+/* ------------------------------------------------ */
 
 /* A kernel thread or user process.
  *
@@ -110,16 +118,6 @@ struct thread {
 	int nice;
 	int recent_cpu;
 
-	/* --- Project2: User programs - system call --- */
-	int exit_status; // _exit(), _wait() 구현 때 사용
-	
-	/* project 2 */
-	struct list child_list; // _fork(), wait() 구현 때 사용
-    struct list_elem child_elem; // _fork(), _wait() 구현 때 사용
-    struct intr_frame parent_if; // _fork() 구현 때 사용, __do_fork() 함수
-
-	
-
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
@@ -133,6 +131,38 @@ struct thread {
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
+
+	/* --- Project2: User programs - system call --- */
+	/* 종료 상태를 저장 */
+	int exit_status; // _exit(), _wait() 구현 때 사용
+	
+	/* project 2 : Process Structure */
+	/* 자식 프로세스 순회용 list*/
+	struct list child_list; // _fork(), wait() 구현 때 사용
+    struct list_elem child_elem; // _fork(), _wait() 구현 때 사용
+
+    /* wait_sema : 자식 프로세스가 종료할 때까지 대기. */
+	struct semaphore wait_sema; /* wait() */
+
+	/* 
+	parent_if : 자식에게 넘겨줄 intr_frame 
+	fork_sema : 자식 프로세스 fork가 완료될 때 까지 부모가 기다림
+	free_sema : 자식 프로세스 종료상태를 부모가 받을 때까지 종료를 대기
+	*/
+	struct intr_frame parent_if; // _fork() 구현 때 사용, __do_fork() 함수
+	struct semaphore fork_sema; /* parent thread should wait while child thread copy parent */
+	struct semaphore free_sema;	/* wait() */
+
+	/* --- Project 2 : File Descriptor --- */ 
+	/* fd table 파일 구조체와 fd index */
+	struct file **fd_table;   /* allocated in thread_create */
+	int fd_idx;              /* for open file's fd in fd_table */
+
+	int stdin_count;
+	int stdout_count;
+
+	/* 현재 실행 중인 파일 */
+	struct file *running;
 };
 
 /* If false (default), use round-robin scheduler.

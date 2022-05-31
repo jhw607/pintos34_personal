@@ -7,6 +7,13 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+/* ---------- Project 2 ---------- */
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "userprog/process.h"
+#include "kernel/stdio.h"
+#include "threads/palloc.h"
+/* ------------------------------- */
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -49,20 +56,21 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			 break;
 		
 		case SYS_EXIT:			/* Terminate this process. */
-			 exit(f->R.rdi);
-			 break;
+			exit(f->R.rdi);
+			break;
 
-		// case SYS_FORK:			/* Clone current process. */
-		// 	 fork(f->R.rdi);
-		// 	 break;
+		case SYS_FORK:			/* Clone current process. */
+			fork(f->R.rdi, f);
+			break;
 			                    
-		// case SYS_EXEC:			/* Switch current process. */
-		// 	 exec(f->R.rdi);
-        //    	 break;
+		case SYS_EXEC:			/* Switch current process. */
+			 if(exec(f->R.rdi) == -1)
+			 		 exit(-1);
+           	 break;
 	
-		// case SYS_WAIT:			/* Wait for a child process to die. */
-		// 	 wait(f->R.rdi);
-		// 	 break; 
+		case SYS_WAIT:			/* Wait for a child process to die. */
+			 wait(f->R.rdi);
+			 break; 
 
 	    // case SYS_CREATE:		/* Create a file. */
 		// 	 create(f->R.rdi, f->R.rsi);
@@ -84,16 +92,16 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		// 	 read(f->R.rdi, f->R.rsi, f->R.rdx);
 		// 	 break;
 	
-		// case SYS_WRITE:			/* Write to a file. */
-		// 	 write(f->R.rdi, f->R.rsi, f->R.rdx);
-		// 	 break;
+		case SYS_WRITE:			/* Write to a file. */
+			 write(f->R.rdi, f->R.rsi, f->R.rdx);
+			 break;
 	                   
 		// case SYS_SEEK:			/* Change position in a file. */
 		// 	 seek(f->R.rdi, f->R.rdx);
 		// 	 break;
 	                  
         // case SYS_TELL:			/* Report current position in a file. */
-		//      tell(f->R.rdi);
+		//   tell(f->R.rdi);
 		// 	 break;
 	                   
 		// case SYS_CLOSE:			/* Close a file. */
@@ -123,6 +131,8 @@ check_address(void *addr)
 
 }
 
+/* project 2 : System Call */
+
 void halt(void){
 
 	power_off();
@@ -150,14 +160,76 @@ bool create(const char *file, unsigned inital_size){
 	}
 }
 
-bool remove(const char *file, unsigned inital_size){
+bool remove(const char *file){
 
 	/* 성공 : True, 실패 : False */
 	check_address(file);
-	if(filesys_remove(file, inital_size)){
-		return true;
-	}	
-	else	{
-		return false;
+	return filesys_remove(file);
+
+}
+
+/* Project 2 : Process structure (fork) */
+
+tid_t fork (const char *thread_name, struct intr_frame *f) {
+	// check_address(thread_name);
+	return process_fork(thread_name, f);// child thread namedl 들어온다
+}
+
+/* Project 2 : Process structure (exec, wait) */
+
+tid_t exec(char *file_name){ // 현재 프로세스를 command line에서 지정된 인수를 전달하여 이름이 지정된 실행 파일로 변경
+
+	check_address(file_name);
+	int size = strlen(file_name) + 1;
+	char *fn_copy = palloc_get_page(PAL_ZERO); // memory setting -> 메모리의 값을 원하는 크기만큼 세팅
+	if (fn_copy == NULL){
+		exit(-1);
 	}
+	strlcpy (fn_copy, file_name, size); // file_name을 fn_copy에 문자열 복사하겠다.
+
+	if (process_exec(fn_copy) == -1){ // load 실패시 success -1로 되어 return
+		return -1;
+	}
+	NOT_REACHED();
+	return 0;
+
+}
+
+int wait(tid_t pid)
+{
+	process_wait(pid);
+}
+
+/* Project 2 : File Descriptor */
+
+static struct file *find_file_by_fd(int fd)
+{
+	struct thread *cur = thread_current();
+	if (fd < 0 || fd > FDCOUNT_LIMIT){
+		return NULL;
+	}
+	return cur->fd_table[fd];
+}
+
+// int add_file_to_fdt(struct file *file)
+// {
+// 	struct thread *cur = thread_current();
+// 	struct file **fdt = cur->fd_table;
+
+// 	for (i = 2; i)
+// 	cur->fd_table
+
+// 	return fd;
+
+// }
+
+void remove_file_from_fdt(int fd)
+{
+	struct thread *cur = thread_current();
+	if (fd < 0 || fd > FDCOUNT_LIMIT){
+		return NULL;
+	}
+
+	cur->fd_table[fd] = NULL;
+
 }
