@@ -35,7 +35,7 @@ main (int argc UNUSED, char *argv[])
   
   msg ("end %d", n);
   return n;
-  return 0;
+  
 }
 
 
