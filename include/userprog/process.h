@@ -17,4 +17,7 @@ static void argument_stack(struct intr_frame *if_, int argv_cnt, char **argv_lis
 /* project 2 : Process Structure */
 struct thread * get_child(int pid);
 
+/* project 2 : Denying Write to Executable */
+// struct lock deny_write_lock;
+
 #endif /* userprog/process.h */

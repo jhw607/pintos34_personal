@@ -33,6 +33,10 @@ static void __do_fork (void *);
 static void
 process_init (void) {
 	struct thread *current = thread_current ();
+
+	/* project 2 : Denying Write to Executable */
+	/* 파일 사용 시 lock 초기화 */
+	// lock_init(&deny_write_lock);
 }
 
 /* Starts the first userland program, called "initd", loaded from FILE_NAME.
@@ -189,6 +193,7 @@ __do_fork (void *aux) {
 
 	/* 1. Read the cpu context to local stack. */
 	memcpy (&if_, parent_if, sizeof (struct intr_frame));
+	if_.R.rax = 0; // fork 함수의 결과로 자식 프로세스는 0을 반환해야한다.
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create(); //current가 child, pml4는 물리페이지 테이블을 만든다.
@@ -230,9 +235,6 @@ __do_fork (void *aux) {
 	// printf("sema_up start\n");
 	sema_up(&current->fork_sema);
 	// printf("sema_up end\n");
-	if_.R.rax = 0; // fork 함수의 결과로 자식 프로세스는 0을 반환해야한다.
-	
-
 	// process_init ();
 
 	/* Finally, switch to the newly created process. */
@@ -262,7 +264,6 @@ process_exec (void *f_name) {
 	/* Command Line 전체 Parsing */
 	for (token = strtok_r (file_name, " ", &save_ptr); token != NULL; 
 	token = strtok_r (NULL, " ", &save_ptr)){
-		
 		
 		argv[argc] = token;
 		argc++;
@@ -590,12 +591,26 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	process_activate (thread_current ());
 
+	/* project 2 : Denying Write to Executable */
+	/* lock 획득 */
+	// lock_acquire(&deny_write_lock);
+
 	/* Open executable file. */
 	file = filesys_open (file_name);
 	if (file == NULL) {
+
+		// lock_release(&deny_write_lock);
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
+	/* project 2 : Denying Write to Executable */
+	/* 실행 중인 스레드 t의 running을 실행할 파일로 초기화*/
+	t->running = file;
+
+	/* 현재 오픈한 파일에 다른내용 쓰지 못하게 함 */
+	file_deny_write(file);
+
+	// lock_release(&deny_write_lock);
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -676,7 +691,7 @@ load (const char *file_name, struct intr_frame *if_) {
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
+	// file_close (file);
 	return success;
 }
 

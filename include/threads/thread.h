@@ -161,6 +161,7 @@ struct thread {
 	int stdin_count;
 	int stdout_count;
 
+	/* --- Project 2 : Denying Write to Executable --- */
 	/* 현재 실행 중인 파일 */
 	struct file *running;
 };

@@ -233,10 +233,12 @@ int wait(tid_t pid)
 
 static struct file *find_file_by_fd(int fd)
 {
-	struct thread *cur = thread_current();
 	if (fd < 0 || fd > FDCOUNT_LIMIT){
 		return NULL;
 	}
+	
+	struct thread *cur = thread_current();
+	
 	return cur->fd_table[fd];
 }
 
@@ -310,6 +312,10 @@ int filesize(int fd)
 {
 	struct file *file_obj = find_file_by_fd(fd);
 	
+	if (fd < 0 || fd >= FDCOUNT_LIMIT){
+		return NULL;
+	}
+
 	if (file_obj == NULL){
 		return -1;
 	}
@@ -331,8 +337,10 @@ NULL : 널 포인터 0x00000000 : 값이 없다, 비어 있다 의미 : pointer(
 */
 
 int read(int fd, void *buffer, unsigned size)
-{
+{	
+	
 	check_address(buffer);
+	check_address(buffer+size-1);
 	int read_count; // 글자수 카운트 용(for문 사용하기 위해)
 	struct thread *cur = thread_current();
 	struct file *file_obj = find_file_by_fd(fd);
@@ -341,6 +349,9 @@ int read(int fd, void *buffer, unsigned size)
 	if (file_obj == NULL)
 		return -1;
 	
+	if (fd < 0 || fd >= FDCOUNT_LIMIT){
+		return NULL;
+	}
 	/* STDIN일 때 */
 	if(fd == 0)
 	{
@@ -366,6 +377,7 @@ int read(int fd, void *buffer, unsigned size)
 			lock_release(&filesys_lock);
 	}
 
+	
 	return read_count;
 
 
@@ -373,6 +385,7 @@ int read(int fd, void *buffer, unsigned size)
 
 int write(int fd, void *buffer, unsigned size)
 {
+	// printf("write 1\n");
 	check_address(buffer);
 	int read_count; // 글자수 카운트 용(for문 사용하기 위해)
 	struct file *file_obj = find_file_by_fd(fd);
@@ -391,6 +404,7 @@ int write(int fd, void *buffer, unsigned size)
 	/* STDIN일 때 : -1 반환 */
 	else if (fd == 0)
 	{
+		
 		return -1;
 	}
 	
@@ -399,45 +413,96 @@ int write(int fd, void *buffer, unsigned size)
 			read_count = file_write(file_obj,buffer, size);
 			lock_release(&filesys_lock);
 	}
-
+	// printf("write 2\n");
 	return read_count;
 
 }
-
+/*
 void seek(int fd, unsigned position)
 {
+	// printf("seek inner start\n");
 	if(fd < 2){	// 초기값 2로 설정. 0:표준입력, 1:표준출력
 		return;
 	}
+	// printf("seek inner start 2\n");
+
+	if (fd < 0 || fd >= FDCOUNT_LIMIT){
+		return NULL;
+	}
+	// printf("seek inner start 3\n");
+
 	struct file *file_obj = find_file_by_fd(fd);
-	check_address(file_obj);
+	// check_address(file_obj);
+	// printf("seek inner start 4\n");
 	if(file_obj == NULL){
 		return;
 	}
+	
+
 	file_seek(file_obj, position);
+	
+	// printf("seek inner start 5\n");
+
 
 }
+*/
 
+void seek(int fd, unsigned position)
+{
+	if (fd < 0 || fd >= FDCOUNT_LIMIT){
+		return;
+	}
+
+	struct file *fileobj = find_file_by_fd(fd);
+	if (fileobj <= 2)
+		return;
+	fileobj->pos = position;	
+}
+/*
 unsigned tell(int fd)
 {
 	if(fd < 2){	// 초기값 2로 설정. 0:표준입력, 1:표준출력
 		return;
 	}
+	
+	if (fd < 0 || fd >= FDCOUNT_LIMIT){
+		return NULL;
+	}
+
 	struct file *file_obj = find_file_by_fd(fd);
-	check_address(file_obj);
+	// check_address(file_obj);
 	if(file_obj == NULL){
 		return;
 	}
 	return file_tell(fd);
 
 }
+*/
+
+/* 파일의 시작점부터 현재 위치까지의 offset을 반환 */
+unsigned tell(int fd)
+{
+	if (fd < 0 || fd >= FDCOUNT_LIMIT){
+		return;
+	}
+
+	struct file *fileobj = find_file_by_fd(fd);
+	if (fileobj <= 2)
+		return;
+	return file_tell(fileobj);
+}
 
 void close(int fd)
 {
+	
 	struct file *file_obj = find_file_by_fd(fd);
 	if (file_obj == NULL)
 	{
 		return;
+	}
+
+	if (fd < 0 || fd >= FDCOUNT_LIMIT){
+		return NULL;
 	}
 
 	remove_file_from_fdt(fd);
