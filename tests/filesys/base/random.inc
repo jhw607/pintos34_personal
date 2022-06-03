@@ -37,9 +37,8 @@ test_main (void)
   for (i = 0; i < BLOCK_CNT; i++) 
     {
       size_t ofs = BLOCK_SIZE * order[i];
-      // printf("seek start\n");
+      
       seek (fd, ofs);
-      // printf("seek end\n");
       if (write (fd, buf + ofs, BLOCK_SIZE) != BLOCK_SIZE)
         fail ("write %d bytes at offset %zu failed", (int) BLOCK_SIZE, ofs);
     }
@@ -52,8 +51,9 @@ test_main (void)
       size_t ofs = BLOCK_SIZE * order[i];
       seek (fd, ofs);
       if (read (fd, block, BLOCK_SIZE) != BLOCK_SIZE)
-        fail ("read %d bytes at offset %zu failed", (int) BLOCK_SIZE, ofs);
+      fail ("read %d bytes at offset %zu failed", (int) BLOCK_SIZE, ofs);
       compare_bytes (block, buf + ofs, BLOCK_SIZE, ofs, file_name);
+      
     }
 
   msg ("close \"%s\"", file_name);

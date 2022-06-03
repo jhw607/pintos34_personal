@@ -236,8 +236,8 @@ thread_create (const char *name, int priority,
 	if(t->fd_table == NULL)
 		return TID_ERROR;
 
-	t->fd_table[0] = 0;
-	t->fd_table[1] = 1;
+	t->fd_table[0] = 1;
+	t->fd_table[1] = 2;
 	t->fd_idx = 2; // idx 2로 초기화
 
 	//count 초기화
