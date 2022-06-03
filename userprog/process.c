@@ -106,7 +106,7 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* project 2 : Process Structure */
 	struct thread *child = get_child(pid);
 	// printf("sema_down start\n");
-	sema_down(&child->fork_sema);
+	sema_down(&child->fork_sema); 
 	// printf("sema_down end\n");
 
 	// fork 오류나서 추가한 부분(debug)
@@ -122,7 +122,7 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
  * pml4_for_each. This is only for the project 2. */
 static bool
 duplicate_pte (uint64_t *pte, void *va, void *aux) { //부모 page table을 복제하기 위해 page table을 생성
-													 //왜 복제 ? : 자식 프로세스가 생성되면 부모 프로세스가 가진 것과 동일한 파일 디스크립터 테이블 생성
+													 //왜 복제 ? : 자식 프로세스가 생성되면 부모 프로세스가 가진 것과 동일한 페이지 테이블 생성
 	struct thread *current = thread_current ();
 	struct thread *parent = (struct thread *) aux;
 	void *parent_page;
@@ -196,7 +196,8 @@ __do_fork (void *aux) {
 	if_.R.rax = 0; // fork 함수의 결과로 자식 프로세스는 0을 반환해야한다.
 
 	/* 2. Duplicate PT */
-	current->pml4 = pml4_create(); //current가 child, pml4는 물리페이지 테이블을 만든다.
+	//current가 child, pml4는 물리페이지 테이블을 만든다.
+	current->pml4 = pml4_create(); 
 	if (current->pml4 == NULL)
 		goto error;
 
@@ -206,6 +207,8 @@ __do_fork (void *aux) {
 	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
 		goto error;
 #else
+	// 부모 pml4를 duplicate_pte함수에 적용 -> 다 복제하겠다.
+	// pml4_for_each->pdp_for_each->pgdir_for_each->pt_for_each(함수 타고 들어가면 나옴)
 	if (!pml4_for_each (parent->pml4, duplicate_pte, parent))
 		goto error;
 #endif
@@ -216,7 +219,7 @@ __do_fork (void *aux) {
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
 
-	if (parent->fd_idx == FDCOUNT_LIMIT)
+	if (parent->fd_idx >= FDCOUNT_LIMIT)
 		goto error;
 	
 	current->fd_table[0] = parent->fd_table[0]; // stdin
@@ -232,9 +235,7 @@ __do_fork (void *aux) {
 
 	current->fd_idx = parent->fd_idx;
 	// if child loaded successfully, wake up parent in process_fork
-	// printf("sema_up start\n");
 	sema_up(&current->fork_sema);
-	// printf("sema_up end\n");
 	// process_init ();
 
 	/* Finally, switch to the newly created process. */
@@ -467,12 +468,13 @@ process_exit (void) {
 	palloc_free_multiple(curr->fd_table, FDT_PAGES); 	// for multi-oom(메모리 누수)
 	file_close(curr->running); 	// for rox- (실행중에 수정 못하도록)
 
+	process_cleanup (); // pml4를 날림(이 함수를 call 한 thread의 pml4)
+
 	sema_up(&curr->wait_sema); 	// 종료되었다고 기다리고 있는 부모 thread에게 signal 보냄-> sema_up에서 val을 올려줌
 	sema_down(&curr->free_sema); // 부모에게 exit_status가 정확히 전달되었는지 확인(wait)
 								 // why ? : 자식프로세스가 종료가 바로 되버리면(부모 프로세스 상관없이)
 								 // process_wait에서 child 리스트의 elem 제거, exit status 전달받음 등등을 못받을 수 있다
 								 // 오류가 발생할 수 있으므로 부모 프로세스가 자식 프로세스의 정보를 다 가져오기 전까지 살아 있도록 하는 장치
-	process_cleanup (); // pml4를 날림(이 함수를 call 한 thread의 pml4)
 }
 
 /* Free the current process's resources. */
@@ -916,7 +918,7 @@ struct thread * get_child(int pid){
 	struct thread *cur = thread_current();
 	struct list *child_list = &cur->child_list;
 	struct list_elem *e;
-
+	if (list_empty(child_list)) return NULL;
 	for (e = list_begin (child_list); e != list_end (child_list); e = list_next (e)){
 		struct thread *t = list_entry(e, struct thread, child_elem);
 		if (t->tid == pid){

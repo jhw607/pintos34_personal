@@ -10,6 +10,7 @@
 /* ---------- Project 2 ---------- */
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "threads/vaddr.h"
 #include "userprog/process.h"
 #include "kernel/stdio.h"
 #include "threads/palloc.h"
@@ -17,6 +18,7 @@
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
+void check_address(void *addr);
 
 /* Syscall function */
 void halt(void);
@@ -24,7 +26,7 @@ void exit(int status);
 bool create(const char *file, unsigned inital_size);
 bool remove(const char *file);
 tid_t fork (const char *thread_name, struct intr_frame *f);
-tid_t exec(char *file_name);
+int exec(char *file_name);
 int wait(tid_t pid);
 int open(const char *file);
 int filesize(int fd);
@@ -41,8 +43,6 @@ int add_file_to_fdt(struct file *file);
 void remove_file_from_fdt(int fd);
 
 
-
-
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -55,6 +55,9 @@ void remove_file_from_fdt(int fd);
 #define MSR_STAR 0xc0000081         /* Segment selector msr */
 #define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
+
+const int STDIN = 1;
+const int STDOUT = 2;
 
 void
 syscall_init (void) {
@@ -93,7 +96,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			                    
 		case SYS_EXEC:			/* Switch current process. */
 			 if(exec(f->R.rdi) == -1)
-			 		 exit(-1);
+			 	exit(-1);
            	 break;
 	
 		case SYS_WAIT:			/* Wait for a child process to die. */
@@ -125,7 +128,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			 break;
 	                   
 		case SYS_SEEK:			/* Change position in a file. */
-			 seek(f->R.rdi, f->R.rdx);
+			 seek(f->R.rdi, f->R.rsi);
 			 break;
 	                  
         case SYS_TELL:			/* Report current position in a file. */
@@ -137,8 +140,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			 break;
 
 		default:
-			printf ("system call!\n");
-			thread_exit ();
+			// printf ("system call!\n");
+			// thread_exit ();
+			exit(-1);
 			break;
 		            
 	}
@@ -172,7 +176,7 @@ void exit(int status){
 
 	struct thread *t = thread_current();
 	t->exit_status = status; 
-	printf ("%s: exit(%d)\n", t->name, status);
+	printf ("%s: exit(%d)\n", thread_name(), status);
 	thread_exit();
 
 }
@@ -226,14 +230,14 @@ tid_t exec(char *file_name){ // 현재 프로세스를 command line에서 지정
 
 int wait(tid_t pid)
 {
-	process_wait(pid);
+	return process_wait(pid);
 }
 
 /* Project 2 : File Descriptor */
 
 static struct file *find_file_by_fd(int fd)
 {
-	if (fd < 0 || fd > FDCOUNT_LIMIT){
+	if (fd < 0 || fd >= FDCOUNT_LIMIT){
 		return NULL;
 	}
 	
@@ -244,35 +248,33 @@ static struct file *find_file_by_fd(int fd)
 
 /* 
 파일 객체(struct File)를 File Descriptor 테이블에 추가
-파일 객체의 File Descriptor 반환
+현재 스레드의 fd_idx(file descriptor Table index 끝값) 반환
 */
-int add_file_to_fdt(struct file *file)	
+int add_file_to_fdt(struct file *file)
 {
-	
-	struct thread *cur = thread_current();
-	struct file **fdt = cur->fd_table;
-	int fd = cur->fd_idx; // fd값은 2부터 출발
+    struct thread *cur = thread_current();
+    struct file **fdt = cur->fd_table;
 
-	while (fdt[fd] != NULL && fd < FDCOUNT_LIMIT)
-	{
-		fd++;
-	}
+    // Find open spot from the front
+    // fd 위치가 제한 범위 넘지않고, fd table의 인덱스 위치와 일치한다면
+    while (cur->fd_idx < FDCOUNT_LIMIT && fdt[cur->fd_idx])
+    {
+        cur->fd_idx++;
+    }
 
-	if (fd >= FDCOUNT_LIMIT)
-		return -1;
-	
+    // error - fd table full
+    if (cur->fd_idx >= FDCOUNT_LIMIT)
+        return -1;
 
-	fdt[fd] = file; 
-	// cur->fd_idx = cur->fd_idx + 1;	
-	return fd;
-
+    fdt[cur->fd_idx] = file;
+    return cur->fd_idx;
 }
 
 void remove_file_from_fdt(int fd)
 {
 	struct thread *cur = thread_current();
-	if (fd < 0 || fd > FDCOUNT_LIMIT){
-		return NULL;
+	if (fd < 0 || fd >= FDCOUNT_LIMIT){
+		return;
 	}
 
 	cur->fd_table[fd] = NULL;
@@ -312,9 +314,6 @@ int filesize(int fd)
 {
 	struct file *file_obj = find_file_by_fd(fd);
 	
-	if (fd < 0 || fd >= FDCOUNT_LIMIT){
-		return NULL;
-	}
 
 	if (file_obj == NULL){
 		return -1;
@@ -349,9 +348,6 @@ int read(int fd, void *buffer, unsigned size)
 	if (file_obj == NULL)
 		return -1;
 	
-	if (fd < 0 || fd >= FDCOUNT_LIMIT){
-		return NULL;
-	}
 	/* STDIN일 때 */
 	if(fd == 0)
 	{
@@ -385,7 +381,6 @@ int read(int fd, void *buffer, unsigned size)
 
 int write(int fd, void *buffer, unsigned size)
 {
-	// printf("write 1\n");
 	check_address(buffer);
 	int read_count; // 글자수 카운트 용(for문 사용하기 위해)
 	struct file *file_obj = find_file_by_fd(fd);
@@ -397,7 +392,7 @@ int write(int fd, void *buffer, unsigned size)
 	/* STDOUT일 때 */
 	if(fd == 1)
 	{
-		putbuf(buffer, size);
+		putbuf(buffer, size); // fd값이 1일 때, 버퍼에 저장된 데이터를 화면에 출력(putbuf()이용)
 		read_count = size;
 		
 	}
@@ -413,97 +408,45 @@ int write(int fd, void *buffer, unsigned size)
 			read_count = file_write(file_obj,buffer, size);
 			lock_release(&filesys_lock);
 	}
-	// printf("write 2\n");
 	return read_count;
 
 }
-/*
+
+/* 파일의 위치(offset)를 이동하는 함수 */
 void seek(int fd, unsigned position)
 {
-	// printf("seek inner start\n");
-	if(fd < 2){	// 초기값 2로 설정. 0:표준입력, 1:표준출력
-		return;
-	}
-	// printf("seek inner start 2\n");
-
-	if (fd < 0 || fd >= FDCOUNT_LIMIT){
-		return NULL;
-	}
-	// printf("seek inner start 3\n");
-
+	
 	struct file *file_obj = find_file_by_fd(fd);
-	// check_address(file_obj);
-	// printf("seek inner start 4\n");
-	if(file_obj == NULL){
+	if (fd < 2)
 		return;
-	}
-	
-
-	file_seek(file_obj, position);
-	
-	// printf("seek inner start 5\n");
-
-
+	// fileobj->pos = position;
+	file_seek(file_obj, position);	
 }
-*/
 
-void seek(int fd, unsigned position)
-{
-	if (fd < 0 || fd >= FDCOUNT_LIMIT){
-		return;
-	}
 
-	struct file *fileobj = find_file_by_fd(fd);
-	if (fileobj <= 2)
-		return;
-	fileobj->pos = position;	
-}
-/*
-unsigned tell(int fd)
-{
-	if(fd < 2){	// 초기값 2로 설정. 0:표준입력, 1:표준출력
-		return;
-	}
-	
-	if (fd < 0 || fd >= FDCOUNT_LIMIT){
-		return NULL;
-	}
-
-	struct file *file_obj = find_file_by_fd(fd);
-	// check_address(file_obj);
-	if(file_obj == NULL){
-		return;
-	}
-	return file_tell(fd);
-
-}
-*/
 
 /* 파일의 시작점부터 현재 위치까지의 offset을 반환 */
 unsigned tell(int fd)
 {
-	if (fd < 0 || fd >= FDCOUNT_LIMIT){
-		return;
+	struct file *file_obj = find_file_by_fd(fd);
+	if (fd < 2){
+	   return;
 	}
-
-	struct file *fileobj = find_file_by_fd(fd);
-	if (fileobj <= 2)
-		return;
-	return file_tell(fileobj);
+	return file_tell(file_obj);
 }
 
 void close(int fd)
 {
-	
+	if (fd <= 1) return;
 	struct file *file_obj = find_file_by_fd(fd);
+	
+	
 	if (file_obj == NULL)
 	{
 		return;
 	}
 
-	if (fd < 0 || fd >= FDCOUNT_LIMIT){
-		return NULL;
-	}
-
 	remove_file_from_fdt(fd);
+
+
 }
