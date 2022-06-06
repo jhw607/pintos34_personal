@@ -349,7 +349,7 @@ int read(int fd, void *buffer, unsigned size)
 		return -1;
 	
 	/* STDIN일 때 */
-	if(fd == 0)
+	if(file_obj == STDIN)
 	{
 		char key;
 		for (int read_count = 0;read_count < size; read_count++){
@@ -362,7 +362,7 @@ int read(int fd, void *buffer, unsigned size)
 		
 	}
 	/* STDOUT일 때 : -1 반환 */
-	else if (fd == 1)
+	else if (file_obj == STDOUT)
 	{
 		return -1;
 	}
@@ -390,14 +390,14 @@ int write(int fd, void *buffer, unsigned size)
 		return -1;
 	
 	/* STDOUT일 때 */
-	if(fd == 1)
+	if(file_obj == STDOUT)
 	{
 		putbuf(buffer, size); // fd값이 1일 때, 버퍼에 저장된 데이터를 화면에 출력(putbuf()이용)
 		read_count = size;
 		
 	}
 	/* STDIN일 때 : -1 반환 */
-	else if (fd == 0)
+	else if (file_obj == STDIN)
 	{
 		
 		return -1;
