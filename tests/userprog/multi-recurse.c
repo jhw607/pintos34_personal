@@ -13,7 +13,6 @@ int
 main (int argc UNUSED, char *argv[]) 
 {
   int n = atoi (argv[1]);
-
   msg ("begin %d", n);
   if (n != 0) 
     {
@@ -36,4 +35,7 @@ main (int argc UNUSED, char *argv[])
   
   msg ("end %d", n);
   return n;
+  
 }
+
+

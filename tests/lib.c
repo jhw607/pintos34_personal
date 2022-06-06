@@ -88,6 +88,7 @@ exec_children (const char *child_name, pid_t pids[], size_t child_cnt)
       if ((pids[i] = fork (child_name))){
         CHECK (pids[i] != PID_ERROR,
              "exec child %zu of %zu: \"%s\"", i + 1, child_cnt, cmd_line);
+
       } else {
         exec (cmd_line);
       }
