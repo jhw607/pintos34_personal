@@ -310,21 +310,36 @@ bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
 	
-}
-// void
-// destructor (struct hash_elem *h, void *aux){
+	struct hash_iterator i;
+	hash_first (&i, src);
+	while (hash_next (&i)) {
+		struct page *p = hash_entry (hash_cur (&i), struct page, hash_elem);
+		struct page *copy_p = calloc (1, sizeof (struct page));
+		if (copy_p == NULL) {						// 할당 실패시
+			supplemental_page_table_kill (dst);		// 테이블 삭제 // ? 해도 되나?
+			return false;
+		}
+		memcpy (copy_p, p, sizeof (struct page));	// 복사
+		hash_insert (dst, &copy_p->hash_elem);		// 삽입
+		vm_claim_page(copy_p->va);
+	}
+	return true;
 
-// 	struct page *p = hash_entry(h, struct page, hash_elem);
+}
+void
+destructor (struct hash_elem *h, void *aux){
+
+	struct page *p = hash_entry(h, struct page, hash_elem);
+	vm_dealloc_page(p);
 	
-// }
+}
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-	// struct hash *pages = &spt->hash;
-	// hash_destroy(pages, destructor);
-	// vm_dealloc_page(p);
+	struct hash *pages = &spt->hash;
+	hash_destroy(pages, destructor);
 	
 }
