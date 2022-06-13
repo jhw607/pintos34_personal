@@ -279,7 +279,7 @@ hash_int (int i) {
 /* Returns the bucket in H that E belongs in. */
 static struct list *
 find_bucket (struct hash *h, struct hash_elem *e) {
-	size_t bucket_idx = h->hash (e, h->aux) & (h->bucket_cnt - 1);
+	size_t bucket_idx = h->hash (e, h->aux) & (h->bucket_cnt - 1); // hash값이 어디 버킷 index에 있는지
 	return &h->buckets[bucket_idx];
 }
 
@@ -369,7 +369,8 @@ rehash (struct hash *h) {
 				elem != list_end (old_bucket); elem = next) {
 			struct list *new_bucket
 				= find_bucket (h, list_elem_to_hash_elem (elem));
-			next = list_next (elem);
+			next = list_next (elem); // 이거 왜 위에다가 안올려놨지? -> elem이 바뀌면 어떻게 되지?
+									 // -> 현재 것을 없애줘야하는데 못없애지
 			list_remove (elem);
 			list_push_front (new_bucket, elem);
 		}

@@ -20,6 +20,7 @@
 #include "intrinsic.h"
 /* project 2 */
 #include "userprog/process.h"
+#include "vm/vm.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -79,7 +80,7 @@ initd (void *f_name) {
 #endif
 
 	process_init ();
-
+	
 	if (process_exec (f_name) < 0)
 		PANIC("Fail to launch initd\n");
 	NOT_REACHED ();
@@ -846,11 +847,41 @@ install_page (void *upage, void *kpage, bool writable) {
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
+struct aux_lazy_load {
+
+	struct file *file;
+	off_t ofs;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
+};
+
+
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	// vm_alloc_page_with_initializer -> page만든 것을 전달해줌
+	// page fault가 일어났을 떄, 불려야하는데 바로 실행되는 것 아닌가? -> page fault가 일어났을 때, 불려짐
+	struct aux_lazy_load *lazy = aux;
+	struct file *file = lazy->file;
+	uint32_t page_read_bytes = lazy->read_bytes;
+	uint32_t page_zero_bytes = lazy->zero_bytes;
+
+	file_seek(file, lazy->ofs); 
+	/* 이미 만들어져 있으니까 load만 하면된다 */
+	/* Load this page */
+	// 실패시 palloc free 하는것이 맞나?
+	if (file_read(file, page->frame->kva, page_read_bytes) != (int) page_read_bytes){
+		palloc_free_page(page->frame->kva);
+		return false;
+	}
+
+	memset (page->frame->kva + page_read_bytes, 0, page_zero_bytes);	
+
+	//return은 뭘로?, 안해도 되나?
+	return true;
+
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -883,6 +914,16 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		void *aux = NULL;
+		struct aux_lazy_load tmp =
+		{
+				.file = file,
+				.ofs = ofs,
+				// .upage = upage,
+				.read_bytes = page_read_bytes,
+				.zero_bytes = page_zero_bytes,
+				// .writable = writable, 
+		};
+		aux= &tmp;
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, aux))
 			return false;
@@ -896,16 +937,35 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 }
 
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
+// 스택 페이지를 만들라는 것인데, 왜 만들어야하지? 이 페이지의 역할은 무엇?
+// lazy load 할 필요가 없음, 스택을 식별하는 방법은 무엇일까?-> VM_MARKER_0
 static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
+	// uint8_t *kpage;
+	// struct thread *t = thread_current();
 
 	/* TODO: Map the stack on stack_bottom and claim the page immediately.
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
 
+	// kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+	// if(kpage != NULL){
+	// 	success = pml4_get_page(t->pml4 ,stack_bottom)==NULL &&
+	// 				pml4_set_page(t->pml4, stack_bottom, kpage, true);
+	// 	if(success)
+	// 		if_->rsp = USER_STACK;
+	// 	else
+	// 		palloc_free_page(kpage); 
+	// }
+	// return success;
+
+	if(vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, 1) && vm_claim_page(stack_bottom))
+		success= true;
+		if_->rsp = USER_STACK;
+	
 	return success;
 }
 #endif /* VM */
