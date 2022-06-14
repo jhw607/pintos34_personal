@@ -21,4 +21,14 @@ struct thread * get_child(int pid);
 /* project 2 : Denying Write to Executable */
 // struct lock deny_write_lock;
 
+/* project 3 */
+struct aux_lazy_load {
+
+	struct file *file;
+	off_t ofs;
+	size_t read_bytes;
+	size_t zero_bytes;
+};
+
+
 #endif /* userprog/process.h */

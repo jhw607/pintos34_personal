@@ -28,10 +28,14 @@ vm_anon_init (void) {
 bool
 anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
+	// printf("anon_initializer Start \n");
 	page->operations = &anon_ops;
 	struct anon_page *anon_page = &page->anon;
 	if(type & VM_MARKER_0)
 		anon_page->is_stack = 1;
+	// printf("anon_initializer FINISH \n");
+
+	return true;
 	
 }
 
@@ -51,5 +55,5 @@ anon_swap_out (struct page *page) {
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
-	palloc_free_page(page->frame->kva);
+	// palloc_free_page(page->frame->kva);
 }

@@ -23,6 +23,7 @@
 #include "vm/vm.h"
 #ifdef VM
 #include "vm/vm.h"
+#include "threads/malloc.h"
 #endif
 
 static void process_cleanup (void);
@@ -282,7 +283,9 @@ process_exec (void *f_name) {
 
 	/* We first kill the current context */
 	process_cleanup ();
-
+#ifdef VM
+	supplemental_page_table_init (&thread_current ()->spt);
+#endif
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
@@ -304,50 +307,6 @@ process_exec (void *f_name) {
 	NOT_REACHED ();
 }
 
-
-
-// static void argument_stack(int argc_cnt, char **argv_list, void **stp){
-// 	int i;
-// 	char *argu_addr[128];
-// 	struct intr_frame *if_;
-
-	/* 프로그램 이름 및 인자(문자열) push */
-	/* 프로그램 이름 및 인자 주소들 push */
-	/* argv (문자열을 가리키는 주소들의 배열을 가리킴) push*/
-	/* argc (문자열의 개수 저장) push */
-	/* fake address(0) 저장 */
-
-
-// 	for(i = argc_cnt-1; i>-1; i--){
-// 		for(int j=strlen(argv_list[i]+1);j>-1;j--){
-			
-// 			*stp = *stp - 1;
-		
-		
-// 		argu_addr[i] = stp;
-
-// 		}
-// 	}
-
-// 	while ( *(int*)stp % 8 != 0 ){
-// 		stp--;
-// 		*stp = 0; 
-// 	}
-
-// 	for (i=argc_cnt; i>-1 ; i--){
-// 		*stp = *stp - 8;
-// 		if (i == argc_cnt){
-// 			*stp = 0; 
-// 		}
-// 		else{
-// 			*stp = &argu_addr[i];
-// 		}
-// 	}
-
-// 	*stp = *stp -8;
-// 	*stp = 0;
-
-// }
 
 
 // TODO: 유저 스택에 파싱된 토큰을 저장하는 함수 구현
@@ -670,8 +629,11 @@ load (const char *file_name, struct intr_frame *if_) {
 						read_bytes = 0;
 						zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
 					}
+					// printf("load segment before\n");
 					if (!load_segment (file, file_page, (void *) mem_page,
 								read_bytes, zero_bytes, writable))
+					// printf("load segment after\n");
+
 						goto done;
 				}
 				else
@@ -681,7 +643,9 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 
 	/* Set up stack. */
+	// printf("setup_stack before\n");
 	if (!setup_stack (if_))
+	// printf("setup_stack after\n");
 		goto done;
 
 	/* Start address. */
@@ -847,14 +811,6 @@ install_page (void *upage, void *kpage, bool writable) {
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
-struct aux_lazy_load {
-
-	struct file *file;
-	off_t ofs;
-	uint32_t read_bytes;
-	uint32_t zero_bytes;
-};
-
 
 static bool
 lazy_load_segment (struct page *page, void *aux) {
@@ -863,22 +819,25 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: VA is available when calling this function. */
 	// vm_alloc_page_with_initializer -> page만든 것을 전달해줌
 	// page fault가 일어났을 떄, 불려야하는데 바로 실행되는 것 아닌가? -> page fault가 일어났을 때, 불려짐
-	struct aux_lazy_load *lazy = aux;
-	struct file *file = lazy->file;
-	uint32_t page_read_bytes = lazy->read_bytes;
-	uint32_t page_zero_bytes = lazy->zero_bytes;
-
-	file_seek(file, lazy->ofs); 
+	
+	struct aux_lazy_load *aux_box = (struct aux_lazy_load *)aux;
+	struct file *file = aux_box->file;
+	off_t aux_ofs = aux_box->ofs;
+	size_t page_read_bytes = aux_box->read_bytes;
+	size_t page_zero_bytes = aux_box->zero_bytes;
+	// printf("lazy_load_segment start\n");
+	file_seek(file, aux_ofs); 
 	/* 이미 만들어져 있으니까 load만 하면된다 */
 	/* Load this page */
 	// 실패시 palloc free 하는것이 맞나?
 	if (file_read(file, page->frame->kva, page_read_bytes) != (int) page_read_bytes){
-		palloc_free_page(page->frame->kva);
+		// palloc_free_page(page->frame->kva);
 		return false;
 	}
 
 	memset (page->frame->kva + page_read_bytes, 0, page_zero_bytes);	
-
+	// printf("lazy_load_segment finish\n");
+	free(aux);
 	//return은 뭘로?, 안해도 되나?
 	return true;
 
@@ -904,37 +863,48 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
-
+	// printf("load segment sssstart\n");
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
-		struct aux_lazy_load tmp =
-		{
-				.file = file,
-				.ofs = ofs,
-				// .upage = upage,
-				.read_bytes = page_read_bytes,
-				.zero_bytes = page_zero_bytes,
-				// .writable = writable, 
-		};
-		aux= &tmp;
+		struct aux_lazy_load *aux_box = malloc(sizeof (struct aux_lazy_load));
+		// *tmp=(struct aux_lazy_load)
+		// {
+		// 		.file = file,
+		// 		.ofs = ofs,
+		// 		// .upage = upage,
+		// 		.read_bytes = page_read_bytes,
+		// 		.zero_bytes = page_zero_bytes,
+		// 		// .writable = writable, 
+		// };
+		aux_box->file = file;
+		aux_box->ofs = ofs;
+		aux_box->read_bytes = page_read_bytes;
+		aux_box->zero_bytes = page_zero_bytes;
+
+		// printf("load segment start\n");
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
-					writable, lazy_load_segment, aux))
+					writable, lazy_load_segment, aux_box))
 			return false;
+		// printf("load segment finish\n");
+
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
+
+
+
+
 
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
 // 스택 페이지를 만들라는 것인데, 왜 만들어야하지? 이 페이지의 역할은 무엇?
@@ -943,31 +913,25 @@ static bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-	// uint8_t *kpage;
-	// struct thread *t = thread_current();
-
+	// printf("setup_stack start\n");
 	/* TODO: Map the stack on stack_bottom and claim the page immediately.
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */
 	/* TODO: Your code goes here */
 
-	// kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-	// if(kpage != NULL){
-	// 	success = pml4_get_page(t->pml4 ,stack_bottom)==NULL &&
-	// 				pml4_set_page(t->pml4, stack_bottom, kpage, true);
-	// 	if(success)
-	// 		if_->rsp = USER_STACK;
-	// 	else
-	// 		palloc_free_page(kpage); 
-	// }
-	// return success;
-
-	if(vm_alloc_page(VM_ANON | VM_MARKER_0, stack_bottom, 1) && vm_claim_page(stack_bottom))
-		success= true;
-		if_->rsp = USER_STACK;
-	
+	if(vm_alloc_page(VM_ANON|VM_MARKER_0, stack_bottom, 1)) {
+		success= vm_claim_page(stack_bottom);
+		if (success) {
+			if_->rsp = USER_STACK;
+		}
+		// printf("setup_stack finish1\n");
+	}
+	// printf("setup_stack finish2\n");
 	return success;
 }
+
+
+
 #endif /* VM */
 
 

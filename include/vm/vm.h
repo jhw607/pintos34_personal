@@ -1,8 +1,11 @@
 #ifndef VM_VM_H
 #define VM_VM_H
 #include <stdbool.h>
+
+#include <hash.h>
+#include <list.h>
+#include "threads/mmu.h"
 #include "threads/palloc.h"
-#include "lib/kernel/hash.h"
 
 
 enum vm_type {
@@ -35,7 +38,6 @@ enum vm_type {
 
 struct page_operations;
 struct thread;
-static struct frame_table frame_table;
 
 #define VM_TYPE(type) ((type) & 7)
 
@@ -49,6 +51,9 @@ struct page {
 	struct frame *frame;   /* Back reference for frame */
 
 	/* Your implementation */
+	/* --- project3-1 --- */
+	struct hash_elem hash_elem; /* Hash table element. */
+	bool writable;
 
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
@@ -58,9 +63,7 @@ struct page {
 		struct file_page file;
 	
 	/* hash table 선언 */
-	/* --- project3-1 --- */
-	struct hash_elem hash_elem; /* Hash table element. */
-	bool writable;
+
 
 #ifdef EFILESYS
 		struct page_cache page_cache;
@@ -106,11 +109,6 @@ struct supplemental_page_table {
 	
 };
 
-struct frame_table {
-
-	struct list frame_list;
-
-};
 
 #include "threads/thread.h"
 void supplemental_page_table_init (struct supplemental_page_table *spt);
