@@ -74,9 +74,9 @@ process_create_initd (const char *file_name) { // command line에서 받은 argu
 /* A thread function that launches first user process. */
 static void
 initd (void *f_name) {
-#ifdef VM
-	supplemental_page_table_init (&thread_current ()->spt);
-#endif
+// #ifdef VM
+// 	supplemental_page_table_init (&thread_current ()->spt);
+// #endif
 
 	process_init ();
 
@@ -89,6 +89,7 @@ initd (void *f_name) {
  * TID_ERROR if the thread cannot be created. */
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
+	// printf("\n ##### debug ##### start process_fork \n");
 	/* Clone current thread to new thread.*/
 	// printf("fork start\n");
 	struct thread *parent = thread_current();
@@ -106,6 +107,7 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* project 2 : Process Structure */
 	struct thread *child = get_child(pid);
 	// printf("sema_down start\n");
+	// printf("\n ##### debug ##### in process_fork | sema_down(&child->fork_sema) \n");
 	sema_down(&child->fork_sema); 
 	// printf("sema_down end\n");
 
@@ -178,7 +180,7 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) { //부모 page table을 복�
  *       this function. */
 static void
 __do_fork (void *aux) {
-	// printf("do_fork start\n");
+	// printf("\n ##### debug ##### start __do_fork \n");
 	struct intr_frame if_;
 	struct thread *parent = (struct thread *) aux;
 	struct thread *current = thread_current ();
@@ -235,6 +237,7 @@ __do_fork (void *aux) {
 
 	current->fd_idx = parent->fd_idx;
 	// if child loaded successfully, wake up parent in process_fork
+	// printf("\n ##### debug ##### in __do_fork | sema_up(&current->fork_sema) \n");
 	sema_up(&current->fork_sema);
 	// process_init ();
 
@@ -255,6 +258,7 @@ error:
 // 파싱되지 않은 f_name을 인자로 받아서 전체적으로 파싱해준다
 int
 process_exec (void *f_name) { 
+	// printf("\n ##### debug ##### start process_exec | f_name : %s \n", f_name);
 	char *file_name = f_name;
 	bool success;
 	char *token, *save_ptr;
@@ -281,6 +285,10 @@ process_exec (void *f_name) {
 
 	/* We first kill the current context */
 	process_cleanup ();
+
+#ifdef VM
+	supplemental_page_table_init (&thread_current ()->spt);
+#endif
 
 	/* And then load the binary */
 	success = load (file_name, &_if);
@@ -403,6 +411,7 @@ static void argument_stack(struct intr_frame *if_, int argv_cnt, char **argv_lis
  * does nothing. */
 int
 process_wait (tid_t child_tid UNUSED) {
+	// printf("\n ##### debug ##### start process_wait \n");
 
 	/*
 	자식프로세스가 모두 종료될 때까지 대기(sleep state)
@@ -428,7 +437,7 @@ process_wait (tid_t child_tid UNUSED) {
 	sema_up(struct semaphore * )
 	대리 리스트에 스레드가 존재하면 리스트 맨 처음에 위치한 스레드를 THREAD_READY 상태로 변경 후 schedule() 호출
 	*/
-
+	// printf("\n ##### debug ##### in process_wait | sema_down(&child->wait_sema) \n");
 	sema_down(&child->wait_sema);
 	// 여기서는 parent가 잠드는 거고 -> sema_down 무한루프 돌고있음 -> 해제하려면 sema value가 증가해야함(어디서든 sema up을 해줘야함)
 	// -> sema up은 process_exit에서 해준다
@@ -438,6 +447,7 @@ process_wait (tid_t child_tid UNUSED) {
 	// 깨어나면 child의 exit_status를 얻는다.
     list_remove(&child->child_elem);
 	// child를 부모 list에서 지운다
+	// printf("\n ##### debug ##### in process_wait | sema_up(&child->free_sema) \n");
 	sema_up(&child->free_sema);
 	// child exit status를 받았음을 전달하는 sema
 	// process_exit에서 자식은 종료 허락을 받기위해 기다리고 있고, 부모가 자식의 정보를 다 가져왔음을 알리면 자식은 정상 종료한다
@@ -470,7 +480,9 @@ process_exit (void) {
 
 	process_cleanup (); // pml4를 날림(이 함수를 call 한 thread의 pml4)
 
+	// printf("\n ##### debug ##### in process_exit | sema_up(&curr->wait_sema) \n");
 	sema_up(&curr->wait_sema); 	// 종료되었다고 기다리고 있는 부모 thread에게 signal 보냄-> sema_up에서 val을 올려줌
+	// printf("\n ##### debug ##### in process_exit | sema_down(&curr->free_sema) \n");
 	sema_down(&curr->free_sema); // 부모에게 exit_status가 정확히 전달되었는지 확인(wait)
 								 // why ? : 자식프로세스가 종료가 바로 되버리면(부모 프로세스 상관없이)
 								 // process_wait에서 child 리스트의 elem 제거, exit status 전달받음 등등을 못받을 수 있다
@@ -568,7 +580,7 @@ struct ELF64_PHDR {
 #define ELF ELF64_hdr
 #define Phdr ELF64_PHDR
 
-static bool setup_stack (struct intr_frame *if_);
+bool setup_stack (struct intr_frame *if_);
 static bool validate_segment (const struct Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes,
@@ -580,6 +592,8 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Returns true if successful, false otherwise. */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
+	// printf("\n ##### start load ##### \n");
+
 	struct thread *t = thread_current ();
 	struct ELF ehdr;
 	struct file *file = NULL;
@@ -589,9 +603,17 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
+	// pml4 = palloc_get_page(0)해서 
+	// base_pml4에 있는거 PGSIZE만큼 copy하고 pml4반환
 	if (t->pml4 == NULL)
 		goto done;
 	process_activate (thread_current ());
+	// printf("\n ##### after process_activate ##### \n");
+
+	// pml4_activate(thread->pml4)
+	// ㄴ pml4의 주소를 vtop해서 cr3레지스터에 저장
+	// tss_update(thread)
+	// ㄴ tss->rsp0에 rsp저장?(계산이 thread+PGSIZE 임 왜이렇게 계산함)
 
 	/* project 2 : Denying Write to Executable */
 	/* lock 획득 */
@@ -671,6 +693,7 @@ load (const char *file_name, struct intr_frame *if_) {
 					}
 					if (!load_segment (file, file_page, (void *) mem_page,
 								read_bytes, zero_bytes, writable))
+						// load_segment(file, ofs, upage, read_bytes, zero_bytes, writable)
 						goto done;
 				}
 				else
@@ -764,6 +787,20 @@ static bool install_page (void *upage, void *kpage, bool writable);
  *
  * Return true if successful, false if a memory allocation error
  * or disk read error occurs. */
+
+/* upage의 file에서 ofs에서 시작하는 세그먼트를 로드함
+ * 총 가상 메모리의 read_bytes + zero_bytes는 다음과 같이 초기화됨
+ * 
+ * upage에서 read_bytes는 file에서 ofs부터 시작해서 읽어야함? ofs부터 시작하는 file?
+ * 
+ * upage에서 zero_bytes + read_bytes 는 0으로 설정
+ * 
+ * writable이 true이면 사용자 프로세스에 의해 쓰기 가능해야 하고,
+ * 아니라면 읽기전용이어야 함
+ * 
+ * 성공하면 true를 반환하고, 
+ * 메모리 할당 오류 또는 디스크 읽기 오류가 발생하면 false를 반환 */
+
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
@@ -773,11 +810,18 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 	file_seek (file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0) {
+		// 읽을 바이트 수가 남았거나, zero_bytes가 0이상이면 루프 반복
+
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
+		/* 이 페이지를 어떻게 채울지 계산할 것
+		 * file에서 page_read_bytes 바이트를 읽고
+		 * page_zero_bytes를 0으로 설정? */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+		// 읽을 바이트수가 pgsize보다 작으면 그대로, 아니면 PGSIZE로 세팅
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
+		// PGSIZE - 읽을 바이트 수 : 페이지 단위로 남는 바이트 수?
 
 		/* Get a page of memory. */
 		uint8_t *kpage = palloc_get_page (PAL_USER);
@@ -786,13 +830,22 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 		/* Load this page. */
 		if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
+			// 읽어온 바이트 수를 반환 != 읽을 바이트 수 => 읽으려던 만큼 못읽은건가..?
 			palloc_free_page (kpage);
+			// 그런 거라면 실패니까 반환 ㅇㅇ return도 ㅇㅇ
 			return false;
 		}
 		memset (kpage + page_read_bytes, 0, page_zero_bytes);
+		// 실패 아니면? (kpage+읽을(은) 바이트 수)에서 zero만큼 0으로 세팅
+		// => 한 페이지 단위로 읽어오고 남은 부분은 0으로 맞춰주는 듯
+		// 읽을 바이트가 PGSIZE면 zero는 0임 
+		// 근데 이러면 둘이 더하면 0이 아니라 PGSIZE 나오는데..?
 
 		/* Add the page to the process's address space. */
+		/* 유저 프로세스의 주소공간에 페이지를 추가 */
 		if (!install_page (upage, kpage, writable)) {
+			// pml get, set 호출
+			// 여기도 실패하면 반환
 			printf("fail\n");
 			palloc_free_page (kpage);
 			return false;
@@ -832,12 +885,19 @@ setup_stack (struct intr_frame *if_) {
  * with palloc_get_page().
  * Returns true on success, false if UPAGE is already mapped or
  * if memory allocation fails. */
+/* 사용자 가상 주소 upage에서 커널 가상 주소 kpage로의 매핑을 페이지 테이블에 추가
+ * writable이 true이면 유저프로세스가 페이지를 수정할 수 있고, 아니면 읽기 전용임
+ * upage는 아직 매핑되지 않아야함
+ * kpage는 palloc_get_page를 통해 user pool에서 가져온 페이지여야 함
+ * 성공하면 true를 반환하고, 
+ * 이미 매핑되어 있거나 메모리 할당이 실패하면 false를 반환 */
 static bool
 install_page (void *upage, void *kpage, bool writable) {
 	struct thread *t = thread_current ();
 
 	/* Verify that there's not already a page at that virtual
 	 * address, then map our page there. */
+	/* 해당 가상 주소에 페이지가 아직 없는지 확인하고 해당 페이지에 매핑 */
 	return (pml4_get_page (t->pml4, upage) == NULL
 			&& pml4_set_page (t->pml4, upage, kpage, writable));
 }
@@ -848,28 +908,68 @@ install_page (void *upage, void *kpage, bool writable) {
 
 static bool
 lazy_load_segment (struct page *page, void *aux) {
+	// printf("\n ##### debug ##### start lazy_load_segment \n");
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	/* todo: 파일에서 세그먼트를 로드 */
+	/* todo: va에서 첫번째 페이지폴트가 발생할 때 호출됨 */
+	/* todo: 이 함수를 호출할 때(호출해야?) va를 사용할 수 있음 */
+	
+	struct aux_lazy *aux_lazy = aux;
+	
+	file_seek (aux_lazy->file, aux_lazy->ofs);
+	// printf("\n ##### debug ##### in lazy_load_segment \n");
+	// printf("\n ##### debug ##### aux->file : %p\n", &aux_lazy->file);
+	// printf("\n ##### debug ##### aux->read : %d\n", &aux_lazy->read_bytes);
+	// printf("\n ##### debug ##### aux->zero : %d\n", &aux_lazy->zero_bytes);
+	
+	/* Load this page. */
+	if (file_read (aux_lazy->file, page->frame->kva, aux_lazy->read_bytes) != (int) aux_lazy->read_bytes) {
+		// 읽어온 바이트 수를 반환 != 읽을 바이트 수 => 읽으려던 만큼 못읽은건가..?
+		// palloc_free_page (page->frame->kva);
+		// 그런 거라면 실패니까 반환 ㅇㅇ return도 ㅇㅇ
+		return false;
+	}
+	memset (page->frame->kva + aux_lazy->read_bytes, 0, aux_lazy->zero_bytes);
+	free(aux_lazy);
+
+	return true;
+	
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
  * UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
  * memory are initialized, as follows:
- *
+ * upage에서 file의 오프셋 ofs에서 시작하는 세그먼트를 로드함
+ * 총 가상메모리의 (read_bytes + zero_bytes)바이트가 초기화됨, 다음과 같이
+ * 
  * - READ_BYTES bytes at UPAGE must be read from FILE
  * starting at offset OFS.
+ * - upage의 read_bytes는 오프셋 ofs에서 시작하는 file에서 읽어야함
+ * file의 ofs부터 읽어야한다고..?
  *
  * - ZERO_BYTES bytes at UPAGE + READ_BYTES must be zeroed.
+ * - upage에서 read+zero = 0이어야 함
  *
  * The pages initialized by this function must be writable by the
  * user process if WRITABLE is true, read-only otherwise.
+ * 이 함수로 초기화된 페이지는 
+ * writable이 true일 때 유저프로세스에 의해 쓰기가능하고,
+ * 아니라면 읽기전용임
  *
  * Return true if successful, false if a memory allocation error
- * or disk read error occurs. */
+ * or disk read error occurs. 
+ * 성공하면 true를 반환하고,
+ * 메모리 할당 오류 또는 디스크 읽기 오류가 발생하면 false를 반환
+ * */
+
+
+
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes, bool writable) {
+	// printf("\n ##### start load_segment ##### \n");
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
@@ -878,15 +978,40 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
 		 * and zero the final PAGE_ZERO_BYTES bytes. */
+		/* 이 페이지를 어떻게 채울지 계산할 것
+		 * file에서 page_read_bytes 바이트를 읽고
+		 * page_zero_bytes를 0으로 설정? */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
+		/* todo: lazy_load_segment에 정보를 전달하도록 aux를 세팅 */
+		
+		
+		struct aux_lazy *aux = calloc(1, sizeof(struct aux_lazy));
+		aux->file = file;
+		aux->ofs = ofs;
+		aux->read_bytes = page_read_bytes;
+		aux->zero_bytes = page_zero_bytes;
+		
+		// printf("\n ##### debug ##### in load_segment \n");
+		// printf("\n ##### debug ##### aux->file : %p\n", &aux->file);
+		// printf("\n ##### debug ##### aux->read : %d\n", &aux->read_bytes);
+		// printf("\n ##### debug ##### aux->zero : %d\n", &aux->zero_bytes);
+		
+		ofs += PGSIZE;
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, aux))
+			// 여기서 부르는 건 vm_alloc_page_with_initializer에 인자로 전달돼서
+			// uninit_new할때 init으로 들어가서 세팅만 돼있는거고
+			// 나중에 진짜 폴트나서 uninit_initialize가 호출되면
+			// 그때 init이 실행돼서 lazy_load_segment로 넘어가네
+			// 여기선 부르는게 아님 
+			// vm_alloc~_initializer만 제대로 되면 됨
 			return false;
 
+		// 그럼 정작 파일 읽어오는 것도 나중인거?네?아닌가? 카운트를 여기서하누;
+		// 음 저쪽(lazy_load_segment)에서 읽는거 맞는거 같음
 		/* Advance. */
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
@@ -896,15 +1021,27 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 }
 
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
-static bool
+bool
 setup_stack (struct intr_frame *if_) {
+	// printf("\n ##### start setup_stack ##### \n");
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
 
 	/* TODO: Map the stack on stack_bottom and claim the page immediately.
+	 * todo: stack bottom에 스택을 매핑하고, 즉시 페이지를 요청 
 	 * TODO: If success, set the rsp accordingly.
-	 * TODO: You should mark the page is stack. */
+	 * todo: 성공하면 그에 따라 rsp를 설정
+	 * TODO: You should mark the page is stack.
+	 * todo: 페이지가 스택임을 표시 */
 	/* TODO: Your code goes here */
+
+	if(vm_alloc_page(VM_ANON|VM_MARKER_0, stack_bottom, 1)){
+		
+		success = vm_claim_page(stack_bottom);
+		if(success){
+			if_->rsp = USER_STACK;
+		}
+	}
 
 	return success;
 }

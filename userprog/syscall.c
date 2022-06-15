@@ -15,6 +15,7 @@
 #include "kernel/stdio.h"
 #include "threads/palloc.h"
 /* ------------------------------- */
+#include "vm/vm.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -156,7 +157,7 @@ void
 check_address(void *addr)
 {	
 	struct thread *t = thread_current(); // 현재 스레드의 thread 구조체를 사용하기 위해서 t를 선언
-	if (!is_user_vaddr(addr)||addr==NULL||pml4_get_page(t->pml4, addr)==NULL){
+	if (!is_user_vaddr(addr)||addr==NULL||spt_find_page(&t->spt, addr)==NULL){
 		// 해당 주소값이 유저 가장 주소에 해당하지 않고 or addr = Null or 유저 가상주소가 물리주소와 매핑되지 않은 영역
 
 		exit(-1);

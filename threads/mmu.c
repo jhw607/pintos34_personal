@@ -65,23 +65,37 @@ uint64_t *
 pml4e_walk (uint64_t *pml4e, const uint64_t va, int create) {
 	uint64_t *pte = NULL;
 	int idx = PML4 (va);
+	// 받은 가상주소에서 pml4 offset만큼만 떼와서 idx에 저장
 	int allocated = 0;
 	if (pml4e) {
+		// pml4e 가 있으면 : init에서 넘어올때는 당연히 있음 palloc 할당받을때 assert 줬어서 안됐으면 패닉 났을거
+		// 다른 경우에는 할당 안됐으면 null일수도.
 		uint64_t *pdpe = (uint64_t *) pml4e[idx];
+		// pml4e[idx] = pml4 첫 테이블에서 idx에 해당하는 page directory pointer entry?
 		if (!((uint64_t) pdpe & PTE_P)) {
+			// PTE_P(1) : pdpe의 사용유무 확인 
 			if (create) {
+				// create가 1이면(init에선 1로 들어옴) pallocgetpage
 				uint64_t *new_page = palloc_get_page (PAL_ZERO);
 				if (new_page) {
+					// new_page 주소에 user, writable(쓰기가능유무), present(사용유무) 세팅해서
+					// pml4e[idx]에 방금 만든 페이지를 물리주소로 바꿔서 넣고
+					// allocated = 1
 					pml4e[idx] = vtop (new_page) | PTE_U | PTE_W | PTE_P;
 					allocated = 1;
 				} else
+					// new_page 안만들어졌으면 null
 					return NULL;
 			} else
+				// create가 1이 아니면 null
 				return NULL;
 		}
+		// pdpe가 사용중이었을 때, 혹은 아니었지만 create가 1이라 새로 만들고 나서 여기로 옴
 		pte = pdpe_walk (ptov (PTE_ADDR (pml4e[idx])), va, create);
+		// 다음 단계로 보내는데 12 밑으로 잘라서 주는거같음, va랑 create도 그대로
 	}
 	if (pte == NULL && allocated) {
+		// 만들지도 않았고 찾지도
 		palloc_free_page ((void *) ptov (PTE_ADDR (pml4e[idx])));
 		pml4e[idx] = 0;
 	}
@@ -229,6 +243,15 @@ pml4_get_page (uint64_t *pml4, const void *uaddr) {
  * otherwise it is read-only.
  * Returns true if successful, false if memory allocation
  * failed. */
+/* 사용자 가상 페이지 upage로 부터 
+ * 커널 가상 주소 kpage로 식별된 물리적 프레임으로의 매핑을 pml4에 추가
+ * upage는 아직 매핑되지 않아야함
+ * kpage는 palloc_get_page를 통해 user pool에서 가져온 페이지여야 함
+ * writable이 true이면 유저프로세스가 페이지를 수정할 수 있고, 아니면 읽기 전용임
+ * 성공하면 true를 반환하고, 
+ * 메모리 할당이 실패하면 false를 반환
+ * (install_page랑 굉장히 비슷) */
+
 bool
 pml4_set_page (uint64_t *pml4, void *upage, void *kpage, bool rw) {
 	ASSERT (pg_ofs (upage) == 0);

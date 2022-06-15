@@ -5,6 +5,9 @@ struct page;
 enum vm_type;
 
 struct anon_page {
+	enum vm_type type;
+	bool is_stack;
+	// 스왑 슬롯
 };
 
 void vm_anon_init (void);

@@ -5,25 +5,34 @@
 
 enum vm_type {
 	/* page not initialized */
+	/* 페이지가 초기화되지 않음 */
 	VM_UNINIT = 0,
 	/* page not related to the file, aka anonymous page */
+	/* 파일과 관련 없는 페이지 */
 	VM_ANON = 1,
 	/* page that realated to the file */
+	/* 파일과 관련된 페이지 */
 	VM_FILE = 2,
 	/* page that hold the page cache, for project 4 */
+	/* 페이지 캐시가 들어있는 페이지 - project 4 */
 	VM_PAGE_CACHE = 3,
 
 	/* Bit flags to store state */
+	/* 저장 상태에 대한 비트 플래그 */
 
 	/* Auxillary bit flag marker for store information. You can add more
 	 * markers, until the value is fit in the int. */
+	/* 저장소 정보에 대한 보조 비트 플래그 마커.
+	 * int 사이즈 내에서(?) 마커를 추가할 수 있음?? */
 	VM_MARKER_0 = (1 << 3),
 	VM_MARKER_1 = (1 << 4),
 
 	/* DO NOT EXCEED THIS VALUE. */
+	/* 이 값을 초과할 수 없음 */
 	VM_MARKER_END = (1 << 31),
 };
 
+#include "kernel/hash.h"
 #include "vm/uninit.h"
 #include "vm/anon.h"
 #include "vm/file.h"
@@ -33,6 +42,7 @@ enum vm_type {
 
 struct page_operations;
 struct thread;
+struct frame_table frame_table;
 
 #define VM_TYPE(type) ((type) & 7)
 
@@ -46,7 +56,8 @@ struct page {
 	struct frame *frame;   /* Back reference for frame */
 
 	/* Your implementation */
-
+	struct hash_elem hash_elem;
+	bool writable;
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
@@ -61,8 +72,14 @@ struct page {
 
 /* The representation of "frame" */
 struct frame {
-	void *kva;
+	void *kva;	// physical
 	struct page *page;
+
+	struct hash_elem hash_elem;
+};
+
+struct frame_table{
+	struct hash *hash_table;
 };
 
 /* The function table for page operations.
@@ -85,6 +102,9 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
+	
+	struct hash *hash_table;
+	
 };
 
 #include "threads/thread.h"
@@ -108,5 +128,10 @@ bool vm_alloc_page_with_initializer (enum vm_type type, void *upage,
 void vm_dealloc_page (struct page *page);
 bool vm_claim_page (void *va);
 enum vm_type page_get_type (struct page *page);
+
+unsigned page_hash(const struct hash_elem *h, void *aux UNUSED);
+bool page_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
+unsigned frame_hash(const struct hash_elem *h, void *aux UNUSED);
+bool frame_less(const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
 
 #endif  /* VM_VM_H */

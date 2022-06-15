@@ -21,6 +21,8 @@ static const struct page_operations anon_ops = {
 void
 vm_anon_init (void) {
 	/* TODO: Set up the swap_disk. */
+	
+	
 	swap_disk = NULL;
 }
 
@@ -29,8 +31,18 @@ bool
 anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
 	page->operations = &anon_ops;
+	// printf("\n ##### debug ##### anon_initializer | type : %d \n", type);
+
 
 	struct anon_page *anon_page = &page->anon;
+	if(type & VM_MARKER_0){
+		// printf("\n ##### debug ##### anon_initializer | if \n");
+		anon_page->is_stack = 1;
+	}
+	else{
+		anon_page->is_stack = 0;
+	}
+	return true;
 }
 
 /* Swap in the page by read contents from the swap disk. */
@@ -49,4 +61,8 @@ anon_swap_out (struct page *page) {
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+	// palloc_free_page(page->frame->kva);
+	hash_delete(&frame_table, &page->frame->hash_elem);
+	free(page->frame);
+	return;
 }

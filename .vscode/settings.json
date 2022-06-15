@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "anon.h": "c",
+        "inspect.h": "c",
+        "process.h": "c",
+        "*.inc": "c",
+        "debug.h": "c",
+        "page_cache.h": "c"
+    }
+}
