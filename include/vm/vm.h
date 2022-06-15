@@ -61,15 +61,8 @@ struct page {
 	struct frame *frame;   /* Back reference for frame */
 
 	/* Your implementation */
-<<<<<<< HEAD
 	struct hash_elem hash_elem;
 	bool writable;
-=======
-	/* --- project3-1 --- */
-	struct hash_elem hash_elem; /* Hash table element. */
-	bool writable;
-
->>>>>>> 7c9cf50d9e092d256983bb4430f0d6c597757954
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
@@ -91,18 +84,12 @@ struct page {
 struct frame {
 	void *kva;	// physical
 	struct page *page;
-<<<<<<< HEAD
 
 	struct hash_elem hash_elem;
 };
 
 struct frame_table{
 	struct hash *hash_table;
-=======
-	/* --- project3-1 --- */
-	struct list_elem frame_elem;
-
->>>>>>> 7c9cf50d9e092d256983bb4430f0d6c597757954
 };
 
 
@@ -129,11 +116,7 @@ struct page_operations {
 /* --- project3-1 --- */
 struct supplemental_page_table {
 	
-<<<<<<< HEAD
 	struct hash *hash_table;
-=======
-	struct hash hash;
->>>>>>> 7c9cf50d9e092d256983bb4430f0d6c597757954
 	
 };
 
