@@ -22,6 +22,7 @@
 #include "userprog/process.h"
 #ifdef VM
 #include "vm/vm.h"
+#include "threads/malloc.h"
 #endif
 
 static void process_cleanup (void);
@@ -79,7 +80,7 @@ initd (void *f_name) {
 // #endif
 
 	process_init ();
-
+	
 	if (process_exec (f_name) < 0)
 		PANIC("Fail to launch initd\n");
 	NOT_REACHED ();
@@ -285,11 +286,9 @@ process_exec (void *f_name) {
 
 	/* We first kill the current context */
 	process_cleanup ();
-
 #ifdef VM
 	supplemental_page_table_init (&thread_current ()->spt);
 #endif
-
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
@@ -311,50 +310,6 @@ process_exec (void *f_name) {
 	NOT_REACHED ();
 }
 
-
-
-// static void argument_stack(int argc_cnt, char **argv_list, void **stp){
-// 	int i;
-// 	char *argu_addr[128];
-// 	struct intr_frame *if_;
-
-	/* 프로그램 이름 및 인자(문자열) push */
-	/* 프로그램 이름 및 인자 주소들 push */
-	/* argv (문자열을 가리키는 주소들의 배열을 가리킴) push*/
-	/* argc (문자열의 개수 저장) push */
-	/* fake address(0) 저장 */
-
-
-// 	for(i = argc_cnt-1; i>-1; i--){
-// 		for(int j=strlen(argv_list[i]+1);j>-1;j--){
-			
-// 			*stp = *stp - 1;
-		
-		
-// 		argu_addr[i] = stp;
-
-// 		}
-// 	}
-
-// 	while ( *(int*)stp % 8 != 0 ){
-// 		stp--;
-// 		*stp = 0; 
-// 	}
-
-// 	for (i=argc_cnt; i>-1 ; i--){
-// 		*stp = *stp - 8;
-// 		if (i == argc_cnt){
-// 			*stp = 0; 
-// 		}
-// 		else{
-// 			*stp = &argu_addr[i];
-// 		}
-// 	}
-
-// 	*stp = *stp -8;
-// 	*stp = 0;
-
-// }
 
 
 // TODO: 유저 스택에 파싱된 토큰을 저장하는 함수 구현
@@ -691,6 +646,7 @@ load (const char *file_name, struct intr_frame *if_) {
 						read_bytes = 0;
 						zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
 					}
+					// printf("load segment before\n");
 					if (!load_segment (file, file_page, (void *) mem_page,
 								read_bytes, zero_bytes, writable))
 						// load_segment(file, ofs, upage, read_bytes, zero_bytes, writable)
@@ -703,7 +659,9 @@ load (const char *file_name, struct intr_frame *if_) {
 	}
 
 	/* Set up stack. */
+	// printf("setup_stack before\n");
 	if (!setup_stack (if_))
+	// printf("setup_stack after\n");
 		goto done;
 
 	/* Start address. */
@@ -860,7 +818,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 }
 
 /* Create a minimal stack by mapping a zeroed page at the USER_STACK */
-static bool
+bool
 setup_stack (struct intr_frame *if_) {
 	uint8_t *kpage;
 	bool success = false;
@@ -906,6 +864,7 @@ install_page (void *upage, void *kpage, bool writable) {
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
+
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	// printf("\n ##### debug ##### start lazy_load_segment \n");
@@ -916,7 +875,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	/* todo: va에서 첫번째 페이지폴트가 발생할 때 호출됨 */
 	/* todo: 이 함수를 호출할 때(호출해야?) va를 사용할 수 있음 */
 	
-	struct aux_lazy *aux_lazy = aux;
+	struct aux_lazy *aux_lazy = (struct aux_lazy_load *)aux;
 	
 	file_seek (aux_lazy->file, aux_lazy->ofs);
 	// printf("\n ##### debug ##### in lazy_load_segment \n");
@@ -973,7 +932,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
-
+	// printf("load segment sssstart\n");
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
@@ -983,7 +942,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		 * page_zero_bytes를 0으로 설정? */
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		/* todo: lazy_load_segment에 정보를 전달하도록 aux를 세팅 */
 		
@@ -999,7 +957,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		// printf("\n ##### debug ##### aux->read : %d\n", &aux->read_bytes);
 		// printf("\n ##### debug ##### aux->zero : %d\n", &aux->zero_bytes);
 		
-		ofs += PGSIZE;
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, aux))
 			// 여기서 부르는 건 vm_alloc_page_with_initializer에 인자로 전달돼서
@@ -1009,6 +966,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			// 여기선 부르는게 아님 
 			// vm_alloc~_initializer만 제대로 되면 됨
 			return false;
+		// printf("load segment finish\n");
+
 
 		// 그럼 정작 파일 읽어오는 것도 나중인거?네?아닌가? 카운트를 여기서하누;
 		// 음 저쪽(lazy_load_segment)에서 읽는거 맞는거 같음
@@ -1016,9 +975,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
+		ofs += page_read_bytes;
 	}
 	return true;
 }
+
+
+
+
 
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
 bool
@@ -1026,7 +990,7 @@ setup_stack (struct intr_frame *if_) {
 	// printf("\n ##### start setup_stack ##### \n");
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-
+	// printf("setup_stack start\n");
 	/* TODO: Map the stack on stack_bottom and claim the page immediately.
 	 * todo: stack bottom에 스택을 매핑하고, 즉시 페이지를 요청 
 	 * TODO: If success, set the rsp accordingly.
@@ -1045,6 +1009,9 @@ setup_stack (struct intr_frame *if_) {
 
 	return success;
 }
+
+
+
 #endif /* VM */
 
 
