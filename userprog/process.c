@@ -528,7 +528,6 @@ struct ELF64_PHDR {
 #define ELF ELF64_hdr
 #define Phdr ELF64_PHDR
 
-static bool setup_stack (struct intr_frame *if_);
 static bool validate_segment (const struct Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes,
@@ -772,7 +771,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 }
 
 /* Create a minimal stack by mapping a zeroed page at the USER_STACK */
-static bool
+bool
 setup_stack (struct intr_frame *if_) {
 	uint8_t *kpage;
 	bool success = false;
@@ -825,6 +824,7 @@ lazy_load_segment (struct page *page, void *aux) {
 	off_t aux_ofs = aux_box->ofs;
 	size_t page_read_bytes = aux_box->read_bytes;
 	size_t page_zero_bytes = aux_box->zero_bytes;
+	// printf("aux_ofs: %d\n page_read_bytes : %d\n page_zero_bytes : %d\n", aux_ofs, page_read_bytes, page_zero_bytes);
 	// printf("lazy_load_segment start\n");
 	file_seek(file, aux_ofs); 
 	/* 이미 만들어져 있으니까 load만 하면된다 */
@@ -872,7 +872,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		struct aux_lazy_load *aux_box = malloc(sizeof (struct aux_lazy_load));
-		// *tmp=(struct aux_lazy_load)
+		// *aux_box=(struct aux_lazy_load)
 		// {
 		// 		.file = file,
 		// 		.ofs = ofs,
@@ -909,7 +909,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a PAGE of stack at the USER_STACK. Return true on success. */
 // 스택 페이지를 만들라는 것인데, 왜 만들어야하지? 이 페이지의 역할은 무엇?
 // lazy load 할 필요가 없음, 스택을 식별하는 방법은 무엇일까?-> VM_MARKER_0
-static bool
+bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);

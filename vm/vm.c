@@ -5,6 +5,7 @@
 #include "vm/inspect.h"
 #include "vm/anon.h"
 #include "vm/file.h"
+#include "userprog/process.h"
 
 unsigned page_hash (const struct hash_elem *p_, void *aux);
 bool page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux);
@@ -107,6 +108,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		if (succ) return true;
 		// vm_dealloc_page(page);
 		return false;
+		
 	}
 	
 
@@ -306,28 +308,143 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 }
 
 /* Copy supplemental page table from src to dst */
+// bool
+// supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
+// 		struct supplemental_page_table *src UNUSED) {
+	
+// 	struct hash_iterator i;
+// 	hash_first (&i, &src->hash);
+// 	while (hash_next (&i)) {
+// 		struct page *p = hash_entry (hash_cur (&i), struct page, hash_elem);
+// 		struct page *new_p;
+// 		if (vm_alloc_page_with_initializer(page_get_type(p), p->va, p->writable, p->uninit.init, p->uninit.aux)){
+// 			if(p->frame != NULL){
+// 				if(vm_claim_page(p->va)){
+// 				printf("vm_claim_page end \n");
+// 					// memcpy (new_p, p, sizeof (struct page));
+// 					memcpy (new_p->frame->kva, p->frame->kva, PGSIZE);
+// 				}
+// 				else{
+// 					return false;
+// 				}
+				
+// 			}
+// 		}
+// 		else
+// 			return false;
+	
+// 	}
+// 	return true;
+// }
+// bool
+// supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
+// 		struct supplemental_page_table *src UNUSED) {
+		
+// 	struct hash_iterator i;
+// 	hash_first (&i, &src->hash);
+// 	while (hash_next (&i)){
+// 		struct page *p = hash_entry (hash_cur (&i), struct page, hash_elem);
+// 		struct page *new_p;
+// 		struct thread *curr = thread_current();
+		
+		
+
+		
+// 		if(p->frame != NULL)
+// 		{
+// 				if(vm_alloc_page_with_initializer(page_get_type(p), p->va, p->writable, p->uninit.init, p->uninit.aux))
+// 				{
+// 					new_p = spt_find_page(&curr->spt, p->va);
+// 					memcpy (new_p, p, sizeof (struct page));
+// 					struct frame *frame = vm_get_frame ();
+// 					frame->page = new_p;
+// 					new_p->frame = frame;
+// 					pml4_set_page (curr->pml4, new_p->va, frame->kva, new_p->writable);
+					
+// 				}
+// 				else{
+// 					return false;
+// 				}
+// 		}
+// 		else
+// 		{
+// 			vm_alloc_page(page_get_type(p), p->va, p->writable);
+// 			new_p = spt_find_page(&curr->spt, p->va);
+// 			memcpy (new_p, p, sizeof (struct page));
+
+// 		}
+// 	return true;
+		
+	
+// 	}
+// }	
+
 bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
-	
+		
 	struct hash_iterator i;
-	hash_first (&i, src);
-	while (hash_next (&i)) {
+	hash_first (&i, &src->hash);
+	while (hash_next (&i)){
 		struct page *p = hash_entry (hash_cur (&i), struct page, hash_elem);
-		struct page *copy_p = calloc (1, sizeof (struct page));
-		if (copy_p == NULL) {						// 할당 실패시
-			supplemental_page_table_kill (dst);		// 테이블 삭제 // ? 해도 되나?
-			return false;
-		}
-		memcpy (copy_p, p, sizeof (struct page));	// 복사
-		hash_insert (dst, &copy_p->hash_elem);		// 삽입
-		vm_claim_page(copy_p->va);
+		struct page *new_p;
+		struct thread *curr = thread_current();
+		
+			if(p->operations->type == VM_UNINIT){		
+				struct aux_lazy_load *aux = malloc (sizeof (struct aux_lazy_load));
+			    memcpy (aux, p->uninit.aux, sizeof (struct aux_lazy_load));	// copy aux		
+				if (!vm_alloc_page_with_initializer(page_get_type(p), 
+					p->va, p->writable, p->uninit.init, aux)){
+						return false;
+					}
+
+			}
+
+			else{
+				
+				if(p->uninit.type & VM_MARKER_0){
+					if(!setup_stack(&curr->tf)){
+						return false;
+					}
+				}
+
+				else{
+					if(!vm_alloc_page(page_get_type(p), p->va, p->writable))
+					{
+						return false;
+					}
+					if(!vm_claim_page(p->va))
+					{
+						return false;
+					}
+				}
+				new_p = spt_find_page(dst, p->va);
+				memcpy (new_p->frame->kva, p->frame->kva, PGSIZE);
+			}
+
+		
 	}
 	return true;
+		
+	
+}	
+	// load 안된 친구들 
+	// 1. lazy load를 해줘야함 
+	// 2. aux를 공간할당 받고 넘겨줘야함
+	// 3. 그리고 lazy load를 시킨다
+	// load 된 친구들
+	// 1. lazy load를 안해줘도됨
+	// 2. 올라가 있는 애들 
+	// 스택일 때, set up stack
+	// 아니면 일단 할당 받고
+	// alloc, vm_do_claim
 
-}
+
+
+
+
 void
-destructor (struct hash_elem *h, void *aux){
+spt_destructor (struct hash_elem *h, void *aux){
 
 	struct page *p = hash_entry(h, struct page, hash_elem);
 	vm_dealloc_page(p);
@@ -339,6 +456,6 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-	hash_destroy(&spt->hash, destructor);
+	hash_destroy(&spt->hash, spt_destructor);
 	
 }
