@@ -923,6 +923,7 @@ setup_stack (struct intr_frame *if_) {
 		success= vm_claim_page(stack_bottom);
 		if (success) {
 			if_->rsp = USER_STACK;
+			thread_current()->rsp = USER_STACK;
 		}
 		// printf("setup_stack finish1\n");
 	}

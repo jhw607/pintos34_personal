@@ -114,6 +114,8 @@ struct thread {
 	struct list donors; //기부해준 스레드들의 리스트
 	struct list_elem d_elem; //to be used in donors list of other threads
 
+
+
 	/* mlfq */
 	int nice;
 	int recent_cpu;
@@ -164,6 +166,10 @@ struct thread {
 	/* --- Project 2 : Denying Write to Executable --- */
 	/* 현재 실행 중인 파일 */
 	struct file *running;
+
+	uintptr_t rsp;
+
+
 };
 
 /* If false (default), use round-robin scheduler.

@@ -202,6 +202,40 @@ vm_get_frame (void) {
 /* Growing the stack. */
 static void
 vm_stack_growth (void *addr UNUSED) {
+	// printf("\n##### start vm_stack_growth #####\n");
+
+	// uintptr_t rsp = thread_current()->tf.rsp;
+	// int pg_cnt = (pg_round_down(addr) - pg_round_down(thread_current()->tf.rsp))/PGSIZE;
+	
+	
+	// for(pg_round_down(thread_current()->tf.rsp); 
+	// 	pg_round_down(thread_current()->tf.rsp)>pg_round_down(addr); 
+	// 	pg_round_down(thread_current()->tf.rsp)+PGSIZE)
+	// for(pg_cnt; pg_cnt>0; pg_cnt--){
+	// 	if(!vm_alloc_page(VM_ANON|VM_MARKER_0, pg_round_down(addr), 1))
+	// 		PANIC("");		// 안되면 패닉..?
+	// 	if(vm_claim_page(pg_round_down))
+	// }
+
+	if(vm_alloc_page(VM_ANON|VM_MARKER_0, pg_round_down(addr), 1)) {
+		// printf("\n##### in alloc #####\n");
+
+	// 	if (vm_claim_page(pg_round_down(addr))) {
+	// 		printf("\n##### in claim #####\n");
+	// 		// thread_current()->tf.rsp = addr;
+
+	// 	}
+	// 	else{
+	// 		exit(-1);
+	// 	}
+	}	
+	else{
+		exit(-1);
+	}
+
+	return;
+
+
 }
 
 /* Handle the fault on write_protected page */
@@ -221,19 +255,30 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
-	/* TODO: Validate the fault */
-	// 1. valid page fault check(lazy load 등)
-	// if valid, invalid에 접근하는 fault를 의미
-	// if bogus fault, page안으로 some contents를 로드, return control to the user prog
 	
-	// /* TODO: Your code goes here */
-	page = spt_find_page(spt, addr);
-	// // 2. bogus fault를 어떻게 처리해줘야하는지 ?
-	if (page) 
+	void * rsp = (void *)(user ? f->rsp : thread_current()->rsp);
+	// printf("\n##### rsp : %p #####\n", rsp);
+	// printf("\n##### addr : %p #####\n", addr);
 	
+	if(!not_present){
+		return false;
+	}
+	// printf("\n##### %p ~ %p\n", USER_STACK,(USER_STACK - (1<<20)));
 
+	if((USER_STACK > addr && addr > rsp) || (rsp - addr) == 0x8){		// USER_STACK ~ rsp - 8 이내의 요청인지 확인
+		// printf("are you here?\n");
+		vm_stack_growth(addr);					// 스택 성장
+	}
+
+	page = spt_find_page(spt, addr);
+	if (page) {
+		// printf("find\n");
 		return vm_do_claim_page (page);
-	return false;
+	}
+	// printf("not find\n");
+	
+	
+	exit(-1);
 }
 
 /* Free the page.
@@ -255,8 +300,10 @@ vm_claim_page (void *va UNUSED) {
 	// printf("spt_find_page start\n");
 	page = spt_find_page(&curr->spt, va);
 	// printf("spt_find_page finish\n");
-	if (page == NULL)
+	if (page == NULL){
+		// printf("\n##### in page #####\n");
 		return false;
+	}
 	// if (page==NULL){
 	// 	struct page *page =	(struct page *)malloc(sizeof *page); 
 	// 	if (page != NULL) {
@@ -304,7 +351,6 @@ supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
 	// // NULL이 아니면 조건 추가
 	// if(pages != NULL)
 	hash_init(&spt->hash, page_hash, page_less, NULL); 
-
 }
 
 /* Copy supplemental page table from src to dst */
@@ -329,7 +375,6 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 					}
 
 			}
-
 			else{
 				
 				if(p->uninit.type & VM_MARKER_0){

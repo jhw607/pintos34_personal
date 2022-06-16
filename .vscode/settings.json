@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "vm.h": "c",
+        "lib.h": "c",
+        "*.inc": "c"
+    }
+}

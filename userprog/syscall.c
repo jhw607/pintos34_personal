@@ -43,6 +43,7 @@ void close(int fd);
 static struct file *find_file_by_fd(int fd);
 int add_file_to_fdt(struct file *file);
 void remove_file_from_fdt(int fd);
+void check_buf(void *addr);
 
 
 /* System call.
@@ -82,6 +83,7 @@ void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
 	int sys_number = f->R.rax;
+	thread_current()->rsp = f->rsp;
 	switch (sys_number){
 
 		case SYS_HALT:			/* Halt the operating system. */
@@ -170,9 +172,25 @@ void
 check_address(void *addr)
 {	
 	struct thread *t = thread_current(); // 현재 스레드의 thread 구조체를 사용하기 위해서 t를 선언
-	if (!is_user_vaddr(addr)||addr==NULL||spt_find_page(&t->spt, addr) == NULL){
+	// printf("\n### check vaddr? | %d ###\n", !is_user_vaddr(addr));
+	// printf("\n### check null? | %d ###\n", addr==NULL);
+	// printf("\n### check spt | %d ###\n", spt_find_page(&t->spt, addr) == NULL);
+
+	
+	
+	if (!is_user_vaddr(addr)||addr==NULL){
 		// 해당 주소값이 유저 가상 주소에 해당하지 않고 or addr = Null or 유저 가상주소가 물리주소와 매핑되지 않은 영역
 
+		exit(-1);
+	}
+
+}
+
+void check_buf(void *addr){
+	struct thread *t = thread_current();
+	
+	struct page *p = spt_find_page(&t->spt, addr);
+	if(p!=NULL && !p->writable){
 		exit(-1);
 	}
 
@@ -278,12 +296,17 @@ int add_file_to_fdt(struct file *file)
     {
         cur->fd_idx++;
     }
+	// printf("fd : %d\n", cur->fd_idx);
+	// printf("FDCOUNT_LIMIT : %d\n", FDCOUNT_LIMIT);
 
     // error - fd table full
-    if (cur->fd_idx >= FDCOUNT_LIMIT)
+    if (cur->fd_idx >= FDCOUNT_LIMIT){
+		// printf("error\n");
         return -1;
-
+	}
+	// printf("fdt[fd] : %p\n", fdt[cur->fd_idx]);
     fdt[cur->fd_idx] = file;
+	// printf("fdt[fd] : %p\n", fdt[cur->fd_idx]);
     return cur->fd_idx;
 }
 
@@ -305,6 +328,7 @@ file_obj = file이 되고, 이를 현재 스레드 파일 디스크립터 테이
 */
 int open(const char *file) // 파일 객체에 대한 파일 디스크립터 부여
 {
+
 	check_address(file);
 	lock_acquire(&filesys_lock);
 
@@ -317,10 +341,10 @@ int open(const char *file) // 파일 객체에 대한 파일 디스크립터 부
 	int fd = add_file_to_fdt(file_obj); 
 
 	/* 파일 디스크립터가 가득 찬 경우 */
-	if(fd==-1){
+	if(fd == -1){
 		file_close(file_obj);
 	}
-
+	// printf("fd : %d\n", fd);
 	lock_release(&filesys_lock);
 	return fd;
 
@@ -354,9 +378,10 @@ NULL : 널 포인터 0x00000000 : 값이 없다, 비어 있다 의미 : pointer(
 
 int read(int fd, void *buffer, unsigned size)
 {	
-	
+
 	check_address(buffer);
 	check_address(buffer+size-1);
+	check_buf(buffer);
 	int read_count; // 글자수 카운트 용(for문 사용하기 위해)
 	struct thread *cur = thread_current();
 	struct file *file_obj = find_file_by_fd(fd);
@@ -387,6 +412,7 @@ int read(int fd, void *buffer, unsigned size)
 	else {
 			lock_acquire(&filesys_lock);
 			read_count = file_read(file_obj,buffer, size); // 여기서만 lock을 이용하는 이유?, 키보드 입력 받을 때는 왜 안하는지?
+	// void *addr = NULL; 	*(char *)addr = "a"; printf("\n### fault 1 : %p \n", addr);
 			lock_release(&filesys_lock);
 	}
 
@@ -399,6 +425,7 @@ int read(int fd, void *buffer, unsigned size)
 int write(int fd, void *buffer, unsigned size)
 {
 	check_address(buffer);
+	check_buf(buffer);
 	int read_count; // 글자수 카운트 용(for문 사용하기 위해)
 	struct file *file_obj = find_file_by_fd(fd);
 	unsigned char *buf = buffer;
