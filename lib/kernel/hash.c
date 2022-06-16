@@ -61,7 +61,7 @@ hash_clear (struct hash *h, hash_action_func *destructor) {
 				destructor (hash_elem, h->aux);
 			}
 
-		list_init (bucket);
+		list_init (bucket); //head와 tail 연결
 	}
 
 	h->elem_cnt = 0;

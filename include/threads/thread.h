@@ -118,6 +118,8 @@ struct thread {
 	int nice;
 	int recent_cpu;
 
+	/* project 3 stack growth */
+	uintptr_t rsp;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */

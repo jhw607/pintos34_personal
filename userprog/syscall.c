@@ -40,10 +40,13 @@ void close(int fd);
 
 
 /* Syscall helper Functions */
-static struct file *find_file_by_fd(int fd);
+struct file *find_file_by_fd(int fd);
 int add_file_to_fdt(struct file *file);
 void remove_file_from_fdt(int fd);
 
+
+/* project 3 */
+void check_buf(void *addr);
 
 /* System call.
  *
@@ -81,6 +84,7 @@ syscall_init (void) {
 void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
+	thread_current()->rsp = f->rsp;
 	int sys_number = f->R.rax;
 	switch (sys_number){
 
@@ -141,6 +145,12 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			 close(f->R.rdi);
 			 break;
 
+		// case SYS_MMAP:			/* project 3 */
+		// 	 mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r9);
+		// 	 break;
+		
+		
+
 		default:
 			// printf ("system call!\n");
 			// thread_exit ();
@@ -170,7 +180,7 @@ void
 check_address(void *addr)
 {	
 	struct thread *t = thread_current(); // 현재 스레드의 thread 구조체를 사용하기 위해서 t를 선언
-	if (!is_user_vaddr(addr)||addr==NULL||spt_find_page(&t->spt, addr) == NULL){
+	if (!is_user_vaddr(addr)||addr==NULL){
 		// 해당 주소값이 유저 가상 주소에 해당하지 않고 or addr = Null or 유저 가상주소가 물리주소와 매핑되지 않은 영역
 
 		exit(-1);
@@ -178,6 +188,15 @@ check_address(void *addr)
 
 }
 
+void check_buf(void *addr){
+	struct thread *t = thread_current();
+
+	struct page *p = spt_find_page(&t->spt, addr);
+	if(p!=NULL && !p->writable){
+		exit(-1);
+	}
+
+}
 
 
 
@@ -252,7 +271,7 @@ int wait(tid_t pid)
 
 /* Project 2 : File Descriptor */
 
-static struct file *find_file_by_fd(int fd)
+struct file *find_file_by_fd(int fd)
 {
 	if (fd < 0 || fd >= FDCOUNT_LIMIT){
 		return NULL;
@@ -280,9 +299,9 @@ int add_file_to_fdt(struct file *file)
     }
 
     // error - fd table full
-    if (cur->fd_idx >= FDCOUNT_LIMIT)
+    if (cur->fd_idx >= FDCOUNT_LIMIT){
         return -1;
-
+	}
     fdt[cur->fd_idx] = file;
     return cur->fd_idx;
 }
@@ -357,6 +376,7 @@ int read(int fd, void *buffer, unsigned size)
 	
 	check_address(buffer);
 	check_address(buffer+size-1);
+	check_buf(buffer);
 	int read_count; // 글자수 카운트 용(for문 사용하기 위해)
 	struct thread *cur = thread_current();
 	struct file *file_obj = find_file_by_fd(fd);
@@ -399,6 +419,7 @@ int read(int fd, void *buffer, unsigned size)
 int write(int fd, void *buffer, unsigned size)
 {
 	check_address(buffer);
+	check_buf(buffer);
 	int read_count; // 글자수 카운트 용(for문 사용하기 위해)
 	struct file *file_obj = find_file_by_fd(fd);
 	unsigned char *buf = buffer;
@@ -467,3 +488,24 @@ void close(int fd)
 
 
 }
+
+// void
+// mmap(void *addr, size_t length, int writable,
+//  	int fd, off_t offset){
+	
+// 	// addr이 페이지 크기로 정렬되어 있지 않으면 fail -> offset != 0
+// 	// 매핑된 페이지 범위가 기존 맵핑된 집합과 겹치면 fail -> length
+// 	// addr이 0이면 fail
+// 	// length가 0일 때, fail
+// 	// console I/O를 표시하는 파일디스크립터들은 매핑 불가. -> fd 0,1
+// 	if (offset == 0) return NULL;
+// 	if (addr == 0) return NULL;
+// 	if (length == 0) return NULL;
+// 	if (fd == 0 | fd == 1) return NULL;
+// 	struct file *file = find_file_by_fd(fd);
+// 	if(file == NULL){
+// 		return NULL;
+// 	}
+
+// 	return do_mmap(addr, length, writable, file, offset);
+// }

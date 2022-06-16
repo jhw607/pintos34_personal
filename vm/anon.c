@@ -56,7 +56,7 @@ static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
 	list_remove(&page->frame->frame_elem);
-	// palloc_free_page(page->frame->kva);
+	// palloc_free_page(page->frame->kva); -> pml4에서 pte로 받아서 없애는데 여기서 없애버리면 오류난다!
 	free(page->frame);
 	return;
 }

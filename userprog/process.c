@@ -781,6 +781,7 @@ setup_stack (struct intr_frame *if_) {
 		success = install_page (((uint8_t *) USER_STACK) - PGSIZE, kpage, true);
 		if (success)
 			if_->rsp = USER_STACK;
+			thread_current()->rsp = USER_STACK;
 		else
 			palloc_free_page (kpage);
 	}
@@ -924,9 +925,7 @@ setup_stack (struct intr_frame *if_) {
 		if (success) {
 			if_->rsp = USER_STACK;
 		}
-		// printf("setup_stack finish1\n");
 	}
-	// printf("setup_stack finish2\n");
 	return success;
 }
 

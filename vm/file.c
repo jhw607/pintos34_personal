@@ -1,6 +1,9 @@
 /* file.c: Implementation of memory backed file object (mmaped object). */
 
 #include "vm/vm.h"
+/* project 3 - mmap */
+#include "filesys/file.h"
+#include "userprog/syscall.h"
 
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
@@ -17,6 +20,7 @@ static const struct page_operations file_ops = {
 /* The initializer of file vm */
 void
 vm_file_init (void) {
+	
 }
 
 /* Initialize the file backed page */
@@ -46,13 +50,28 @@ file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
 }
 
+
 /* Do the mmap */
+// 1. 페이지에 대한 공간을 할당 받는다(va)
 void *
 do_mmap (void *addr, size_t length, int writable,
 		struct file *file, off_t offset) {
+	// bool success = false;
+	// offset + length ==PGSIZE
+	// if (file_length(file) != PGSIZE;
+	
+
+
+	// if(success){
+	// 	return addr;
+	// }
+	// else{
+	// 	return NULL;
+	// }	
 }
 
 /* Do the munmap */
+// reopen
 void
 do_munmap (void *addr) {
 }

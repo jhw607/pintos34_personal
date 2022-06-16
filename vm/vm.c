@@ -185,7 +185,6 @@ vm_get_frame (void) {
 		if (frame->kva != NULL){
 			
 			list_push_back(&frame_table, &frame->frame_elem);
-			// fpt_insert_page(&frame_table,frame);
 		}
 	}
 	else
@@ -200,8 +199,20 @@ vm_get_frame (void) {
 }
 
 /* Growing the stack. */
+// static void
 static void
 vm_stack_growth (void *addr UNUSED) {
+	
+	if(vm_alloc_page(VM_ANON|VM_MARKER_0, pg_round_down(addr), 1)) {
+
+	}	
+	else{
+		exit(-1);
+	}
+
+	return;
+
+
 }
 
 /* Handle the fault on write_protected page */
@@ -216,24 +227,38 @@ fault_addr = (void *) rcr2();
 if (vm_try_handle_fault (f, fault_addr, user, write, not_present))
 		return;
 */
+
+/* project 3 - anonymous */
+// 1. page fault난 뒤에 호출이 되고
+// 2. spt page table에서 page를 찾으면
+// 3. vm do claim(lazy load까지 실행)
+/* project 3 - stack growth */
+// 주소 체크를 해야함, stack growth에 대한 문제인지 확인 -> stack의 주소로 확인해야할듯.
+// return vm_stack_growth 진행
+// rsp thread안에서 가져와야함. tf 통해서 가져오면되나?
+// 조건 : rsp가 stack bottom과 stack bottom - 1MB 사이에 있을 때, 체크
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
-	/* TODO: Validate the fault */
-	// 1. valid page fault check(lazy load 등)
-	// if valid, invalid에 접근하는 fault를 의미
-	// if bogus fault, page안으로 some contents를 로드, return control to the user prog
+		void * rsp = (void *)(user ? f->rsp : thread_current()->rsp);
 	
-	// /* TODO: Your code goes here */
-	page = spt_find_page(spt, addr);
-	// // 2. bogus fault를 어떻게 처리해줘야하는지 ?
-	if (page) 
 	
+	if(!not_present){
+		return false;
+	}
 
+	if((USER_STACK > addr && addr > rsp) || (rsp - addr) == 0x8){		// USER_STACK ~ rsp - 8 이내의 요청인지 확인
+		vm_stack_growth(addr);					// 스택 성장
+	}
+
+	page = spt_find_page(spt, addr);
+	if (page) {
 		return vm_do_claim_page (page);
-	return false;
+	}
+	
+	exit(-1);
 }
 
 /* Free the page.
@@ -337,7 +362,6 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 						return false;
 					}
 				}
-
 				else{
 					if(!vm_alloc_page(page_get_type(p), p->va, p->writable))
 					{
