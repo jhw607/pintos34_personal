@@ -145,9 +145,9 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			 close(f->R.rdi);
 			 break;
 
-		// case SYS_MMAP:			/* project 3 */
-		// 	 mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r9);
-		// 	 break;
+		case SYS_MMAP:			/* project 3 */
+			 mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r9);
+			 break;
 		
 		
 
@@ -489,23 +489,32 @@ void close(int fd)
 
 }
 
-// void
-// mmap(void *addr, size_t length, int writable,
-//  	int fd, off_t offset){
+void
+mmap(void *addr, size_t length, int writable,
+ 	int fd, off_t offset){
 	
-// 	// addr이 페이지 크기로 정렬되어 있지 않으면 fail -> offset != 0
-// 	// 매핑된 페이지 범위가 기존 맵핑된 집합과 겹치면 fail -> length
-// 	// addr이 0이면 fail
-// 	// length가 0일 때, fail
-// 	// console I/O를 표시하는 파일디스크립터들은 매핑 불가. -> fd 0,1
-// 	if (offset == 0) return NULL;
-// 	if (addr == 0) return NULL;
-// 	if (length == 0) return NULL;
-// 	if (fd == 0 | fd == 1) return NULL;
-// 	struct file *file = find_file_by_fd(fd);
-// 	if(file == NULL){
-// 		return NULL;
-// 	}
+	// addr이 페이지 크기로 정렬되어 있지 않으면 fail -> offset != 0
+	// 매핑된 페이지 범위가 기존 맵핑된 집합과 겹치면 fail -> length
+	// addr이 0이면 fail
+	// length가 0일 때, fail
+	// console I/O를 표시하는 파일디스크립터들은 매핑 불가. -> fd 0,1
+	if (filesize(fd)<=0) return NULL;
+	if (pg_ofs (addr) == 0) return NULL;
+	if (addr == 0) return NULL;
+	if (length <= 0) return NULL;
+	// if (length % PGSIZE != 0) return NULL;
+	if (fd < 2) return NULL;
+	// if (spt_find_page(&thread_current()->spt, addr) != NULL) return NULL;
+	struct file *file = find_file_by_fd(fd);
+	if(file == NULL){
+		return NULL;
+	}
 
-// 	return do_mmap(addr, length, writable, file, offset);
-// }
+	
+	return do_mmap(addr, length, writable, file, offset);
+}
+
+void munmap(void *addr){
+
+	do_munmap(addr);
+}

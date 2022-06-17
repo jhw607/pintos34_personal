@@ -27,6 +27,8 @@ struct aux_lazy_load {
 	off_t ofs;
 	size_t read_bytes;
 	size_t zero_bytes;
+	// for vm_file
+	uintptr_t mmap_addr;
 };
 
 bool setup_stack (struct intr_frame *if_);

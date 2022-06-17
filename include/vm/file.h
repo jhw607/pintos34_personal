@@ -6,8 +6,21 @@
 struct page;
 enum vm_type;
 
+/* project 3 - memory mapped */
 struct file_page {
-	
+
+	// struct file *file;
+	// off_t ofs;
+	// size_t read_bytes;
+	// size_t zero_bytes;
+	// uint32_t *open_count;
+
+	uintptr_t mmap_addr;	// mmap으로 매핑한 주소
+	// int mmap_page_cnt;		// mmap된 전체 페이지 수
+	struct file *file;	// mapping한 파일
+	off_t ofs;			// file에서의 offset
+	size_t read_bytes;	// 읽어온 바이트 수
+	size_t zero_bytes;	// 나머지 바이트 수 // ? 필요 ?
 };
 
 void vm_file_init (void);

@@ -203,13 +203,9 @@ vm_get_frame (void) {
 static void
 vm_stack_growth (void *addr UNUSED) {
 	
-	if(vm_alloc_page(VM_ANON|VM_MARKER_0, pg_round_down(addr), 1)) {
-
-	}	
-	else{
+	if(!vm_alloc_page(VM_ANON|VM_MARKER_0, pg_round_down(addr), 1)) {
 		exit(-1);
-	}
-
+	}	
 	return;
 
 
@@ -242,7 +238,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
-		void * rsp = (void *)(user ? f->rsp : thread_current()->rsp);
+	void * rsp = (void *)(user ? f->rsp : thread_current()->rsp);
 	
 	
 	if(!not_present){
