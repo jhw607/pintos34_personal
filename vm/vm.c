@@ -104,6 +104,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 		uninit_new(page, upage, init, type, aux, initializer);
 		page->writable = writable;
+		// printf("in initializer >> p->writable : %d\n",page->writable);
 		bool succ = spt_insert_page(spt, page);
 		if (succ) return true;
 		// vm_dealloc_page(page);
@@ -247,7 +248,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	
 	
 	if(!not_present){
-		return false;
+		exit (-1);
 	}
 
 	if((USER_STACK > addr && addr > rsp) || (rsp - addr) == 0x8){		// USER_STACK ~ rsp - 8 이내의 요청인지 확인

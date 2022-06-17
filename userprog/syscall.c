@@ -194,6 +194,7 @@ void check_buf(void *addr){
 
 	struct page *p = spt_find_page(&t->spt, addr);
 	if(p!=NULL && !p->writable){
+		// printf(">> p->writable : %d\n",p->writable);
 		exit(-1);
 	}
 
@@ -427,7 +428,7 @@ int read(int fd, void *buffer, unsigned size)
 int write(int fd, void *buffer, unsigned size)
 {
 	check_address(buffer);
-	check_buf(buffer);
+	// check_buf(buffer);
 	int read_count; // 글자수 카운트 용(for문 사용하기 위해)
 	struct file *file_obj = find_file_by_fd(fd);
 	unsigned char *buf = buffer;
@@ -506,7 +507,9 @@ void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
 	if (filesize (fd) <= 0) return NULL;
 	// todo : It must fail if addr is not page-aligned 
 	if (pg_ofs (addr) != 0) return NULL;
+	// printf("	pg_ofs (addr) != 0 : %d\n", pg_ofs (addr));
 	if (pg_ofs (offset) != 0) return NULL;
+	// printf("	pg_ofs (offset) != 0 : %d\n", pg_ofs (offset));
 	// todo : if addr is 0, it must fail, because some Pintos code assumes virtual page 0 is not mapped.
 	if (addr == 0) return NULL;
 	// todo : Your mmap should also fail when length is zero.
@@ -515,7 +518,7 @@ void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
 	// if (length % PGSIZE != 0) return NULL;
 	struct file *file = find_file_by_fd (fd);
 	if (file == NULL) return NULL;
-	// printf ("	im in mmap! file inode: %p\n", file->inode);
+	// printf ("	im in mmap! %p\n", addr);
 	// printf("	fd : %d\n", fd);
 	return do_mmap (addr, length, writable, file, offset);
 }

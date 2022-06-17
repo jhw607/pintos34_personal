@@ -58,6 +58,11 @@ file_backed_swap_out (struct page *page) {
 static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+	struct thread *cur = thread_current ();
+	if (pml4_is_dirty (cur->pml4, page->va)) {
+		file_write_at (page->file.file, page->frame->kva, page->file.read_bytes, page->file.ofs);	// 쓰인 부분 다시 써줘야함
+		pml4_set_dirty (&cur->pml4, page->va, false);
+	}
 	list_remove(&page->frame->frame_elem);
 	free(page->frame);
 }
@@ -101,6 +106,7 @@ do_mmap (void *addr, size_t length, int writable,
 	temp_addr = addr;
 	off_t temp_offset = offset;
 	while (num_page > 0) {
+		// printf ("	do mmap---------------condition check\n");
 		size_t page_read_bytes = num_page > 1 ? PGSIZE : pg_ofs (addr + length);
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 		// printf("page_read_bytes : %d, temp_offset: %d\n", num_page, temp_offset);
@@ -110,15 +116,16 @@ do_mmap (void *addr, size_t length, int writable,
 		aux->ofs = temp_offset;
 		aux->read_bytes = page_read_bytes;
 		aux->zero_bytes = page_zero_bytes;
-		bool succ = vm_alloc_page_with_initializer (VM_FILE, addr, writable, lazy_load_segment, aux);
+		bool succ = vm_alloc_page_with_initializer (VM_FILE, temp_addr, writable, lazy_load_segment, aux);
 		if (!succ) return NULL;
+		// printf ("	do mmap---------------after init\n");
 		// for next page
 		num_page -= 1;
 		temp_addr += PGSIZE;
 		temp_offset += PGSIZE;
 	}
 	// printf ("===========================\n");
-
+	// printf("	do_mmap addr : %p\n", addr);
 	return addr;
 }
 
