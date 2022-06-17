@@ -18,6 +18,22 @@
 #include "vm/vm.h"
 
 
+/* System call.
+ *
+ * Previously system call services was handled by the interrupt handler
+ * (e.g. int 0x80 in linux). However, in x86-64, the manufacturer supplies
+ * efficient path for requesting the system call, the `syscall` instruction.
+ *
+ * The syscall instruction works by reading the values from the the Model
+ * Specific Register (MSR). For the details, see the manual. */
+
+#define MSR_STAR 0xc0000081         /* Segment selector msr */
+#define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
+#define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
+
+const int STDIN = 1;
+const int STDOUT = 2;
+
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 void check_address(void *addr);
@@ -37,32 +53,15 @@ int write(int fd, void *buffer, unsigned size);
 void seek(int fd, unsigned position);
 unsigned tell(int fd);
 void close(int fd);
-
+void *mmap (void *addr, size_t length, int writable, int fd, off_t offset);
+void munmap (void *addr);
 
 /* Syscall helper Functions */
-struct file *find_file_by_fd(int fd);
 int add_file_to_fdt(struct file *file);
 void remove_file_from_fdt(int fd);
 
-
 /* project 3 */
 void check_buf(void *addr);
-
-/* System call.
- *
- * Previously system call services was handled by the interrupt handler
- * (e.g. int 0x80 in linux). However, in x86-64, the manufacturer supplies
- * efficient path for requesting the system call, the `syscall` instruction.
- *
- * The syscall instruction works by reading the values from the the Model
- * Specific Register (MSR). For the details, see the manual. */
-
-#define MSR_STAR 0xc0000081         /* Segment selector msr */
-#define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
-#define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
-
-const int STDIN = 1;
-const int STDOUT = 2;
 
 void
 syscall_init (void) {
@@ -145,11 +144,13 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			 close(f->R.rdi);
 			 break;
 
-		// case SYS_MMAP:			/* project 3 */
-		// 	 mmap(f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r9);
-		// 	 break;
-		
-		
+		case SYS_MMAP:
+			f->R.rax = mmap (f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+			break;
+
+		case SYS_MUNMAP:
+			munmap (f->R.rdi);
+			break;
 
 		default:
 			// printf ("system call!\n");
@@ -328,6 +329,13 @@ int open(const char *file) // 파일 객체에 대한 파일 디스크립터 부
 	lock_acquire(&filesys_lock);
 
 	struct file *file_obj = filesys_open(file);
+	// printf("=== open ===\n");
+	// printf("file name: %s\n", file);
+	// printf("file inode: %p\n", file_obj->inode);
+	// char * buf1[100];
+	// file_read_at (file_obj, buf1, 100, 0);
+	// printf("read file:  %s \n", buf1);
+	// printf("=== open ===\n");
 
 	if (file_obj == NULL){
 		return -1;
@@ -489,23 +497,29 @@ void close(int fd)
 
 }
 
-// void
-// mmap(void *addr, size_t length, int writable,
-//  	int fd, off_t offset){
-	
-// 	// addr이 페이지 크기로 정렬되어 있지 않으면 fail -> offset != 0
-// 	// 매핑된 페이지 범위가 기존 맵핑된 집합과 겹치면 fail -> length
-// 	// addr이 0이면 fail
-// 	// length가 0일 때, fail
-// 	// console I/O를 표시하는 파일디스크립터들은 매핑 불가. -> fd 0,1
-// 	if (offset == 0) return NULL;
-// 	if (addr == 0) return NULL;
-// 	if (length == 0) return NULL;
-// 	if (fd == 0 | fd == 1) return NULL;
-// 	struct file *file = find_file_by_fd(fd);
-// 	if(file == NULL){
-// 		return NULL;
-// 	}
+void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
+	struct thread *curr = thread_current ();
+	if (is_kernel_vaddr (addr)) return NULL;
+	// todo : the file descriptors representing console input and output are not mappable.
+	if (fd < 2) return NULL;
+	// todo : A call to mmap may fail if the file opened as fd has a length of zero bytes.
+	if (filesize (fd) <= 0) return NULL;
+	// todo : It must fail if addr is not page-aligned 
+	if (pg_ofs (addr) != 0) return NULL;
+	if (pg_ofs (offset) != 0) return NULL;
+	// todo : if addr is 0, it must fail, because some Pintos code assumes virtual page 0 is not mapped.
+	if (addr == 0) return NULL;
+	// todo : Your mmap should also fail when length is zero.
+	if ((long)length <= 0) return NULL;
+	// // todo : length가 page align인지 확인
+	// if (length % PGSIZE != 0) return NULL;
+	struct file *file = find_file_by_fd (fd);
+	if (file == NULL) return NULL;
+	// printf ("	im in mmap! file inode: %p\n", file->inode);
+	// printf("	fd : %d\n", fd);
+	return do_mmap (addr, length, writable, file, offset);
+}
 
-// 	return do_mmap(addr, length, writable, file, offset);
-// }
+void munmap (void *addr) {
+	do_munmap (addr);
+}
