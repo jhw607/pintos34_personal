@@ -345,59 +345,37 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct page *p = hash_entry (hash_cur (&i), struct page, hash_elem);
 		struct page *new_p;
 		struct thread *curr = thread_current();
-		struct aux_lazy_load *aux;
-		switch(p->operations->type){
-
-			aux = malloc (sizeof (struct aux_lazy_load));
-			case VM_UNINIT:{
-				if(page_get_type(p)==VM_ANON){
-					memcpy (aux, p->uninit.aux, sizeof (struct aux_lazy_load));	// copy aux		
-				}
-				else if(page_get_type(p)==VM_FILE){
-
-				}
-				else{
-					return false; // ??
-				}
-
+		
+			if(p->operations->type == VM_UNINIT){		
+				struct aux_lazy_load *aux = malloc (sizeof (struct aux_lazy_load));
+			    memcpy (aux, p->uninit.aux, sizeof (struct aux_lazy_load));	// copy aux		
 				if (!vm_alloc_page_with_initializer(page_get_type(p), 
 					p->va, p->writable, p->uninit.init, aux)){
 						return false;
 					}
-				break;
-				}
 
-			case VM_ANON:{
+			}
 
-				if(p->uninit.type & VM_MARKER_0){
-						if(!setup_stack(&curr->tf)){
-							return false;
-						}
-					}
-					else{
-						if(!vm_alloc_page(page_get_type(p), p->va, p->writable))
-						{
-							return false;
-						}
-						if(!vm_claim_page(p->va))
-						{
-							return false;
-						}
-					}
-					new_p = spt_find_page(dst, p->va);
-					memcpy (new_p->frame->kva, p->frame->kva, PGSIZE);
-				break;
-				}
-			case VM_FILE:{
-				struct file *new_file = file_reopen(&p->file);
-				break;
-				}
+			else{
 				
-			default:
-				return false;
-		}
-
-		
+				if(p->uninit.type & VM_MARKER_0){
+					if(!setup_stack(&curr->tf)){
+						return false;
+					}
+				}
+				else{
+					if(!vm_alloc_page(page_get_type(p), p->va, p->writable))
+					{
+						return false;
+					}
+					if(!vm_claim_page(p->va))
+					{
+						return false;
+					}
+				}
+				new_p = spt_find_page(dst, p->va);
+				memcpy (new_p->frame->kva, p->frame->kva, PGSIZE);
+			}
 
 		
 	}

@@ -58,6 +58,12 @@ file_backed_swap_out (struct page *page) {
 static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+	struct thread *cur = thread_current();
+	if(pml4_is_dirty (cur->pml4, page->va)){
+		file_write_at (file_page->file, page->frame->kva, file_page->read_bytes, file_page->ofs);	// 쓰인 부분 다시 써줘야함
+		pml4_set_dirty (&cur->pml4, page->va, false);
+	}
+
 	list_remove(&page->frame->frame_elem);
 	free(page->frame);
 }
@@ -110,8 +116,11 @@ do_mmap (void *addr, size_t length, int writable,
 		aux->ofs = temp_offset;
 		aux->read_bytes = page_read_bytes;
 		aux->zero_bytes = page_zero_bytes;
-		bool succ = vm_alloc_page_with_initializer (VM_FILE, addr, writable, lazy_load_segment, aux);
+		bool succ = vm_alloc_page_with_initializer (VM_FILE, temp_addr, writable, lazy_load_segment, aux);
 		if (!succ) return NULL;
+		
+		// printf("\n### in mmap ###\n");
+		// printf("### ofs : %d ###\n", temp_offset);
 		// for next page
 		num_page -= 1;
 		temp_addr += PGSIZE;
