@@ -427,7 +427,7 @@ int read(int fd, void *buffer, unsigned size)
 int write(int fd, void *buffer, unsigned size)
 {
 	check_address(buffer);
-	check_buf(buffer);
+	// check_buf(buffer);
 	int read_count; // 글자수 카운트 용(for문 사용하기 위해)
 	struct file *file_obj = find_file_by_fd(fd);
 	unsigned char *buf = buffer;

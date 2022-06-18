@@ -58,8 +58,15 @@ file_backed_swap_out (struct page *page) {
 static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+	
+		struct thread *cur = thread_current ();
+	if (pml4_is_dirty (cur->pml4, page->va)) {
+		file_write_at (page->file.file, page->frame->kva, page->file.read_bytes, page->file.ofs);	// 쓰인 부분 다시 써줘야함
+		pml4_set_dirty (&cur->pml4, page->va, false);
+	}
 	list_remove(&page->frame->frame_elem);
 	free(page->frame);
+
 }
 
 
@@ -69,8 +76,9 @@ do_mmap (void *addr, size_t length, int writable,
 		struct file *file, off_t offset) {
 	// todo 3: On failure, it must return NULL.
 	// count pages for mmap
-	// printf ("===========================\n");
+	// printf("===========================\n");
 	struct file *r_file = file_reopen (file);
+	// printf("+++ Do mmap START +++");
 	if (r_file == NULL) return NULL;	// file reopen 실패시
 	// char * buf1[100];
 	// char * buf2[100];
@@ -103,14 +111,15 @@ do_mmap (void *addr, size_t length, int writable,
 	while (num_page > 0) {
 		size_t page_read_bytes = num_page > 1 ? PGSIZE : pg_ofs (addr + length);
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
-		// printf("page_read_bytes : %d, temp_offset: %d\n", num_page, temp_offset);
+		// printf("page_read_bytes : %d, page_zero_bytes : %d\n", page_read_bytes, page_zero_bytes);
+		// printf("num_page : %d\n", num_page);
 		struct aux_lazy_load *aux = malloc(sizeof (struct aux_lazy_load));
 		aux->mmap_addr = addr;
 		aux->file = r_file;
 		aux->ofs = temp_offset;
 		aux->read_bytes = page_read_bytes;
 		aux->zero_bytes = page_zero_bytes;
-		bool succ = vm_alloc_page_with_initializer (VM_FILE, addr, writable, lazy_load_segment, aux);
+		bool succ = vm_alloc_page_with_initializer (VM_FILE, temp_addr, writable, lazy_load_segment, aux);
 		if (!succ) return NULL;
 		// for next page
 		num_page -= 1;
