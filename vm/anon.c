@@ -32,7 +32,8 @@ vm_anon_init (void) {
 	swap_disk = disk_get (1, 1); 
 	if (swap_disk == NULL) return;
 	lock_init (&swap_table.lock);
-	swap_table.bitmap = bitmap_create (disk_size(swap_disk) / PGSIZE);	// page align
+	swap_table.bitmap = bitmap_create (disk_size (swap_disk)/8);	// page align
+
 	// printf ("swap disk size: %d\n", disk_size(swap_disk));
 }
 
@@ -57,24 +58,39 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 /* Swap in the page by read contents from the swap disk. */
 static bool
 anon_swap_in (struct page *page, void *kva) {
-	struct anon_page *anon_page = &page->anon;
-	disk_read (swap_disk, anon_page->sec_no_idx, kva);
-	bitmap_set_multiple (swap_table.bitmap, anon_page->sec_no_idx, 1, false);
 	printf ("im in anon swap in!\n");
+	struct anon_page *anon_page = &page->anon;
+	int cnt = 0;
+	uint64_t temp_sec_idx = anon_page->sec_no_idx;
+	void *temp_kva = kva;
+	while (cnt < 8) {
+		disk_read (swap_disk, temp_sec_idx * 8 + cnt, temp_kva);
+		cnt += 1;
+		temp_kva += 512;
+	}
+	// disk_read (swap_disk, anon_page->sec_no_idx, kva);
+	bitmap_set_multiple (swap_table.bitmap, anon_page->sec_no_idx, 1, false);
 }
 
 /* Swap out the page by writing contents to the swap disk. */
 static bool
 anon_swap_out (struct page *page) {
-	printf ("im in anon swap out!\n");
+	// printf ("im in anon swap out!\n");
 	struct anon_page *anon_page = &page->anon;
 	lock_acquire (&swap_table.lock);
 	uint64_t sec_no_idx = bitmap_scan_and_flip (swap_table.bitmap, 0, 1, false);
-	printf("sec_no_idx: %d\n", sec_no_idx);
+	// printf("sec_no_idx: %d\n", sec_no_idx);
 	lock_release (&swap_table.lock);
 
 	if (sec_no_idx != BITMAP_ERROR) {
-		disk_write (swap_disk, PGSIZE * sec_no_idx, page->frame->kva);
+		int cnt = 0;
+		void *temp_kva = page->frame->kva;
+		while (cnt < 8) {
+			disk_write (swap_disk, sec_no_idx * 8 + cnt, temp_kva);
+			cnt += 1;
+			temp_kva += 512;
+		}
+		// disk_write (swap_disk, sec_no_idx, page->frame->kva);
 		// struct thread *cur = thread_current ();
 		// pml4_clear_page (cur->pml4, page->va);
 		anon_page->sec_no_idx = sec_no_idx;

@@ -174,8 +174,9 @@ vm_get_victim (void) {
 	// 	struct frame *f = list_entry (e, struct frame, frame_elem);
 	// 	victim = f;
 	// }
-	victim = list_pop_back (&frame_table);
-	printf ("im in vm_get_victim\n");
+	struct list_elem *e = list_pop_back (&frame_table);
+	victim = list_entry (e, struct frame, frame_elem);
+	// printf ("im in vm_get_victim (%p)\n", victim);
 	return victim;
 }
 
@@ -185,9 +186,11 @@ static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
-	printf ("im in vm_evict_frame : %d\n", victim->page->operations->type);
+	// printf ("im in vm_evict_frame (%p)\n", victim);
+	// printf ("im in vm_evict_frame page (%p)\n", victim->page);
 	if (swap_out (victim->page)) {
 		victim->page = NULL;
+		palloc_free_page (victim->kva);
 		return victim;
 	}
 	return NULL;
@@ -204,11 +207,15 @@ vm_get_frame (void) {
 
 	if (frame != NULL) {
 		frame->kva = palloc_get_page(PAL_USER);
-		frame->page = NULL;
-
-		if (frame->kva == NULL) {
-			frame = vm_evict_frame ();
+		while (frame->kva == NULL) {
+			struct frame *victim = vm_evict_frame ();
+			if (victim) {
+				free (victim);
+				frame->kva = palloc_get_page(PAL_USER);
+			}
 		}
+		frame->page = NULL;
+		// printf ("im in vm get frame before push back\n");
 		list_push_back(&frame_table, &frame->frame_elem);
 	} else {
 		PANIC ("TODO");
@@ -264,24 +271,25 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
-	printf ("im in page fault : %p\n", addr);
+	// printf ("im in page fault : %p\n", addr);
 	if(!not_present){
-		printf ("	!not present\n");
+		// printf ("	!not present\n");
 		exit (-1);
 	}
 
 	void * rsp = (void *)(user ? f->rsp : thread_current()->rsp);
 	if((USER_STACK > addr && addr > rsp) || (rsp - addr) == 0x8){		// USER_STACK ~ rsp - 8 이내의 요청인지 확인
-		printf ("	stack\n");
+		// printf ("	stack\n");
 		vm_stack_growth(addr);					// 스택 성장
 	}
 
 	page = spt_find_page(spt, addr);
 	if (page) {
+		// printf ("page type: %d\n", page->operations->type);
 		return vm_do_claim_page (page);
 	}
 	
-	printf ("	find error\n");
+	// printf ("	find error\n");
 	exit(-1);
 }
 
