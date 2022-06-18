@@ -45,6 +45,9 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 /* Swap in the page by read contents from the file. */
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
+	// todo : 스왑슬롯에 자리가 있는지 확인 -> 없으면 패닉
+	// todo : file이 스왑이면 수정만 되는셈..?
+	
 	struct file_page *file_page UNUSED = &page->file;
 }
 

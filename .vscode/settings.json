@@ -3,6 +3,7 @@
         "*.inc": "c",
         "file.h": "c",
         "process.h": "c",
-        "vm.h": "c"
+        "vm.h": "c",
+        "anon.h": "c"
     }
 }
