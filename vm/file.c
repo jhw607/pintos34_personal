@@ -63,7 +63,7 @@ file_backed_destroy (struct page *page) {
 		file_write_at (page->file.file, page->frame->kva, page->file.read_bytes, page->file.ofs);	// 쓰인 부분 다시 써줘야함
 		pml4_set_dirty (&cur->pml4, page->va, false);
 	}
-	list_remove(&page->frame->frame_elem);
+	list_remove(&page->frame->frame_elem); // todo : frame table lock 필요
 	free(page->frame);
 	// if (page->uninit.aux != NULL) free (page->uninit.aux);
 }

@@ -2,6 +2,7 @@
 
 #include "vm/vm.h"
 #include "devices/disk.h"
+#include "lib/kernel/bitmap.h"
 
 /* DO NOT MODIFY BELOW LINE */
 static struct disk *swap_disk;
@@ -17,11 +18,22 @@ static const struct page_operations anon_ops = {
 	.type = VM_ANON,
 };
 
+struct swap_table {
+	struct lock lock;		// 동기화를 위한 lock
+	struct bitmap *bitmap;	// 스왑슬롯의 가용여부를 나타내기위한 bitmap
+};
+
+struct swap_table swap_table;
+
 /* Initialize the data for anonymous pages */
 void
 vm_anon_init (void) {
 	/* TODO: Set up the swap_disk. */
-	swap_disk = NULL;
+	swap_disk = disk_get (1, 1); 
+	if (swap_disk == NULL) return;
+	lock_init (&swap_table.lock);
+	swap_table.bitmap = bitmap_create (disk_size(swap_disk) / PGSIZE);	// page align
+	// printf ("swap disk size: %d\n", disk_size(swap_disk));
 }
 
 /* Initialize the file mapping */
@@ -36,6 +48,7 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	else
 		anon_page->is_stack = 0;
 	// printf("anon_initializer FINISH \n");
+	anon_page->sec_no_idx = NULL;
 
 	return true;
 	
@@ -45,18 +58,37 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 static bool
 anon_swap_in (struct page *page, void *kva) {
 	struct anon_page *anon_page = &page->anon;
+	disk_read (swap_disk, anon_page->sec_no_idx, kva);
+	bitmap_set_multiple (swap_table.bitmap, anon_page->sec_no_idx, 1, false);
+	printf ("im in anon swap in!\n");
 }
 
 /* Swap out the page by writing contents to the swap disk. */
 static bool
 anon_swap_out (struct page *page) {
+	printf ("im in anon swap out!\n");
 	struct anon_page *anon_page = &page->anon;
+	lock_acquire (&swap_table.lock);
+	uint64_t sec_no_idx = bitmap_scan_and_flip (swap_table.bitmap, 0, 1, false);
+	printf("sec_no_idx: %d\n", sec_no_idx);
+	lock_release (&swap_table.lock);
+
+	if (sec_no_idx != BITMAP_ERROR) {
+		disk_write (swap_disk, PGSIZE * sec_no_idx, page->frame->kva);
+		// struct thread *cur = thread_current ();
+		// pml4_clear_page (cur->pml4, page->va);
+		anon_page->sec_no_idx = sec_no_idx;
+		return true;
+	}
+	else
+		PANIC ("swap out error!\n");
 }
 
 /* Destroy the anonymous page. PAGE will be freed by the caller. */
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
+	void *addr = NULL; addr = "1";
 	list_remove(&page->frame->frame_elem);
 	// palloc_free_page(page->frame->kva); -> pml4에서 pte로 받아서 없애는데 여기서 없애버리면 오류난다!
 	free(page->frame);
