@@ -193,6 +193,7 @@ void check_buf(void *addr){
 	struct thread *t = thread_current();
 
 	struct page *p = spt_find_page(&t->spt, addr);
+	// printf("in check_buf | p!=NULL : %d, !p->writable : %d \n", p!=NULL,!p->writable);
 	if(p!=NULL && !p->writable){
 		exit(-1);
 	}
@@ -325,6 +326,7 @@ file_obj = file이 되고, 이를 현재 스레드 파일 디스크립터 테이
 */
 int open(const char *file) // 파일 객체에 대한 파일 디스크립터 부여
 {
+	// printf("\n##### start open #####\n");
 	check_address(file);
 	lock_acquire(&filesys_lock);
 
@@ -414,7 +416,11 @@ int read(int fd, void *buffer, unsigned size)
 	
 	else {
 			lock_acquire(&filesys_lock);
+			// printf("\n### in read ###\n");
+			// printf("\n### file_name : %s ###\n", file_obj->inode.);
+			// printf("### file->pos1 : %d ###\n", file_obj->pos);
 			read_count = file_read(file_obj,buffer, size); // 여기서만 lock을 이용하는 이유?, 키보드 입력 받을 때는 왜 안하는지?
+			// printf("### file->pos2 : %d ###\n", file_obj->pos);
 			lock_release(&filesys_lock);
 	}
 
@@ -426,18 +432,23 @@ int read(int fd, void *buffer, unsigned size)
 
 int write(int fd, void *buffer, unsigned size)
 {
+	// printf("\n##### start write #####\n");
 	check_address(buffer);
-	check_buf(buffer);
+	// printf("\n##### after check_address #####\n");
+	// check_buf(buffer);
+	// printf("\n##### after check_buf #####\n");
 	int read_count; // 글자수 카운트 용(for문 사용하기 위해)
 	struct file *file_obj = find_file_by_fd(fd);
 	unsigned char *buf = buffer;
 
 	if (file_obj == NULL)
+		// printf("\n## file_obj : NULL ##\n");
 		return -1;
 	
 	/* STDOUT일 때 */
 	if(file_obj == STDOUT)
 	{
+		// printf("\n## file_obj : STDOUT ##\n");
 		putbuf(buffer, size); // fd값이 1일 때, 버퍼에 저장된 데이터를 화면에 출력(putbuf()이용)
 		read_count = size;
 		
@@ -445,11 +456,12 @@ int write(int fd, void *buffer, unsigned size)
 	/* STDIN일 때 : -1 반환 */
 	else if (file_obj == STDIN)
 	{
-		
+		// printf("\n## file_obj : STDIN ##\n");		
 		return -1;
 	}
 	
 	else {
+			// printf("\n## file_obj : else ##\n");		
 			lock_acquire(&filesys_lock);
 			read_count = file_write(file_obj,buffer, size);
 			lock_release(&filesys_lock);
@@ -498,6 +510,7 @@ void close(int fd)
 }
 
 void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
+	// printf("\n##### start mmap #####\n");
 	struct thread *curr = thread_current ();
 	if (is_kernel_vaddr (addr)) return NULL;
 	// todo : the file descriptors representing console input and output are not mappable.
