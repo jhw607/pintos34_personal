@@ -9,7 +9,7 @@
 
 unsigned page_hash (const struct hash_elem *p_, void *aux);
 bool page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux);
-struct list frame_table;
+
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -25,8 +25,8 @@ vm_init (void) {
 	/* TODO: Your code goes here. */
 	/* --- project3-1 --- */
 	//frame table init 추가, 나중에 swap in, out할 때-> clock algorithm 사용할 때 어차피 순회해야하므로 해시를 사용하지 않음
-	list_init (&frame_table);
-
+	lock_init (&frame_table.lock);
+	list_init (&frame_table.frame_table);
 }
 
 /* Returns a hash value for page p. */
@@ -174,7 +174,10 @@ vm_get_victim (void) {
 	// 	struct frame *f = list_entry (e, struct frame, frame_elem);
 	// 	victim = f;
 	// }
-	struct list_elem *e = list_pop_back (&frame_table);
+	// struct list_elem *e = list_pop_front (&frame_table);
+	lock_acquire (&frame_table.lock);
+	struct list_elem *e = list_pop_back (&frame_table.frame_table);
+	lock_release (&frame_table.lock);
 	victim = list_entry (e, struct frame, frame_elem);
 	// printf ("im in vm_get_victim (%p)\n", victim);
 	return victim;
@@ -189,7 +192,7 @@ vm_evict_frame (void) {
 	// printf ("im in vm_evict_frame (%p)\n", victim);
 	// printf ("im in vm_evict_frame page (%p)\n", victim->page);
 	if (swap_out (victim->page)) {
-		victim->page = NULL;
+		// victim->page = NULL;
 		palloc_free_page (victim->kva);
 		return victim;
 	}
@@ -216,7 +219,9 @@ vm_get_frame (void) {
 		}
 		frame->page = NULL;
 		// printf ("im in vm get frame before push back\n");
-		list_push_back(&frame_table, &frame->frame_elem);
+		lock_acquire (&frame_table.lock);
+		list_push_back(&frame_table.frame_table, &frame->frame_elem);
+		lock_release (&frame_table.lock);
 	} else {
 		PANIC ("TODO");
 	}
