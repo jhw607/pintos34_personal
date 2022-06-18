@@ -65,6 +65,7 @@ file_backed_destroy (struct page *page) {
 	}
 	list_remove(&page->frame->frame_elem);
 	free(page->frame);
+	// if (page->uninit.aux != NULL) free (page->uninit.aux);
 }
 
 

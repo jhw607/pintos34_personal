@@ -344,27 +344,45 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 	hash_first (&i, &src->hash);
 	while (hash_next (&i)){
 		struct page *p = hash_entry (hash_cur (&i), struct page, hash_elem);
-		struct page *new_p;
+		struct page *child_p;
 		struct thread *curr = thread_current();
 		
-			if(p->operations->type == VM_UNINIT){		
+		switch (p->operations->type) {
+			case VM_UNINIT: {
+				// printf("uninit page\n");
+				// todo : file/anon 에 따라 분기 필요
 				struct aux_lazy_load *aux = malloc (sizeof (struct aux_lazy_load));
-			    memcpy (aux, p->uninit.aux, sizeof (struct aux_lazy_load));	// copy aux		
-				if (!vm_alloc_page_with_initializer(page_get_type(p), 
-					p->va, p->writable, p->uninit.init, aux)){
+				switch (page_get_type (p)) {
+					case VM_ANON: {
+						memcpy (aux, p->uninit.aux, sizeof (struct aux_lazy_load));	// copy aux		
+						break;
+					}
+					case VM_FILE: {
+						struct aux_lazy_load *parent_aux = (struct aux_lazy_load *)p->uninit.aux;
+						aux->file = file_reopen (parent_aux->file);	// file reopen
+						aux->mmap_addr = parent_aux->mmap_addr;
+						aux->ofs = parent_aux->ofs;
+						aux->read_bytes = parent_aux->read_bytes;
+						aux->zero_bytes = parent_aux->zero_bytes;
+						break;
+					}
+					default: {
+						printf("debugging error\n");
 						return false;
 					}
-
+				}
+				if (!vm_alloc_page_with_initializer(page_get_type(p), p->va, p->writable, p->uninit.init, aux)){
+					return false;
+				}
+				break;
 			}
-
-			else{
-				
-				if(p->uninit.type & VM_MARKER_0){
+			case VM_ANON: {
+				if (p->uninit.type & VM_MARKER_0) {	// stack인 경우
 					if(!setup_stack(&curr->tf)){
 						return false;
 					}
 				}
-				else{
+				else {	// stack이 아닌 경우
 					if(!vm_alloc_page(page_get_type(p), p->va, p->writable))
 					{
 						return false;
@@ -374,11 +392,38 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 						return false;
 					}
 				}
-				new_p = spt_find_page(dst, p->va);
-				memcpy (new_p->frame->kva, p->frame->kva, PGSIZE);
+				child_p = spt_find_page(dst, p->va);
+				if (child_p == NULL) return false;
+				memcpy (child_p->frame->kva, p->frame->kva, PGSIZE);
+				break;
 			}
+			case VM_FILE: {
+				// todo : re_open, aux 복사, 초기화 인자 전달, aux 할당 해제 타이밍 고려
+				struct file_page parent_file_page = p->file;
+				struct aux_lazy_load *aux = malloc (sizeof (struct aux_lazy_load));
+				aux->file = file_reopen (parent_file_page.file);
+				aux->mmap_addr = parent_file_page.mmap_addr;
+				aux->ofs = parent_file_page.ofs;
+				aux->read_bytes = parent_file_page.read_bytes;
+				aux->zero_bytes = parent_file_page.zero_bytes;
+				if(!vm_alloc_page_with_initializer(page_get_type(p), p->va, p->writable, lazy_load_segment, aux)) {
+					return false;
+				}
+				if(!vm_claim_page(p->va))
+				{
+					return false;
+				}
+				child_p = spt_find_page(dst, p->va);
+				if (child_p == NULL) return false;
+				memcpy (child_p->frame->kva, p->frame->kva, PGSIZE);
+				break;
 
-		
+			}
+			default: {
+				// printf("debugging error\n");
+				return false;
+			}
+		}
 	}
 	return true;
 		
