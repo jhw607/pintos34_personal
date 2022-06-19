@@ -50,6 +50,9 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 		anon_page->is_stack = 0;
 	// printf("anon_initializer FINISH \n");
 	anon_page->sec_no_idx = NULL;
+	// printf("==============start==============\n");
+	// printf("anon_swap_in: %p:\n", anon_swap_in);
+	// printf("sibal: %p:\n", page->operations->swap_in);
 
 	return true;
 	
@@ -59,10 +62,12 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 static bool
 anon_swap_in (struct page *page, void *kva) {
 	// printf ("im in anon swap in!\n");
+	// printf("help me--: %p\n", page);
 	struct anon_page *anon_page = &page->anon;
 	int cnt = 0;
 	uint64_t temp_sec_idx = anon_page->sec_no_idx;
 	void *temp_kva = kva;
+	// 0x8004263918
 	while (cnt < 8) {
 		disk_read (swap_disk, temp_sec_idx * 8 + cnt, temp_kva);
 		cnt += 1;
@@ -75,11 +80,12 @@ anon_swap_in (struct page *page, void *kva) {
 /* Swap out the page by writing contents to the swap disk. */
 static bool
 anon_swap_out (struct page *page) {
-	// printf ("im in anon swap out!\n");
 	struct anon_page *anon_page = &page->anon;
 	lock_acquire (&swap_table.lock);
 	// printf("4");
 	uint64_t sec_no_idx = bitmap_scan_and_flip (swap_table.bitmap, 0, 1, false);
+	// printf ("swap out va : %p\n",page->va);
+	// 0x4747ff88
 	// printf("sec_no_idx: %d\n", sec_no_idx);
 	lock_release (&swap_table.lock);
 
@@ -95,6 +101,7 @@ anon_swap_out (struct page *page) {
 		struct thread *cur = thread_current ();
 		pml4_clear_page (cur->pml4, page->va);
 		anon_page->sec_no_idx = sec_no_idx;
+		// printf ("im in anon swap out!\n");
 		return true;
 	}
 	else

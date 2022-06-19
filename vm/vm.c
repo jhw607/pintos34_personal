@@ -27,6 +27,7 @@ vm_init (void) {
 	//frame table init 추가, 나중에 swap in, out할 때-> clock algorithm 사용할 때 어차피 순회해야하므로 해시를 사용하지 않음
 	lock_init (&frame_table.lock);
 	list_init (&frame_table.frame_table);
+	frame_table.clock_start_elem = list_head (&frame_table.frame_table);
 }
 
 /* Returns a hash value for page p. */
@@ -72,14 +73,16 @@ static struct frame *vm_evict_frame (void);
 bool
 vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		vm_initializer *init, void *aux) {
-
+	// printf("1\n");
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	bool (*initializer)(struct page *, enum vm_type, void *) ;
+	// printf ("%p hihi\n", spt_find_page (spt, upage));
 
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
+	// printf("2\n");
 	
 		struct page *page =	(struct page *)malloc(sizeof (struct page));
 
@@ -103,10 +106,16 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		}
 
 		uninit_new(page, upage, init, type, aux, initializer);
+	// printf("3\n");
 		page->writable = writable;
 		// printf("in initializer >> p->writable : %d\n",page->writable);
 		bool succ = spt_insert_page(spt, page);
+	// printf("4\n");
 		if (succ) return true;
+	// printf("1\n");
+	// printf("1\n");
+	// printf("1\n");
+	// printf("1\n");
 		// vm_dealloc_page(page);
 		return false;
 		
@@ -122,7 +131,8 @@ struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page page;
 	struct hash_elem *e;
-	page.va = pg_round_down(va); 
+	page.va = pg_round_down(va);
+	// printf ("%p ~ %p (%p)\n", va);
 
 	/* TODO: Fill this function. */
 	e = hash_find(&spt->hash, &page.hash_elem);
@@ -157,33 +167,27 @@ static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
 	 /* TODO: The policy for eviction is up to you. */
-	// struct thread *cur = thread_current ();
-	// lock_acquire (&frame_table.lock);
-	// struct list_elem *e = list_head (&frame_table.frame_table);
-	// while ((e = list_next (e)) != list_end (&frame_table.frame_table)) {
-	// 	struct frame *f = list_entry (e, struct frame, frame_elem);
-	// 	if (pml4_is_accessed (&cur->pml4, f->page->va) == false) {
-	// 		list_remove (e);
-	// 		victim = f;
-	// 		break;
-	// 	} else {
-	// 		pml4_set_accessed (&cur->pml4, f->page->va, false);
-	// 	}
-	// }
-	// if (victim == NULL) {
-	// 	e = list_pop_back(&frame_table.frame_table);
-	// 	struct frame *f = list_entry (e, struct frame, frame_elem);
-	// 	victim = f;
-	// }
-	// lock_release (&frame_table.lock);
-
+	struct thread *cur = thread_current ();
 	lock_acquire (&frame_table.lock);
-	// printf("2\n");
-	// printf ("frame table size (%d)\n", list_size (&frame_table.frame_table));
-	struct list_elem *e = list_pop_back (&frame_table.frame_table);
+	struct list_elem *e = frame_table.clock_start_elem;
+	while ((e = list_next (e)) != list_end (&frame_table.frame_table)) {
+		struct frame *f = list_entry (e, struct frame, frame_elem);
+		// printf("frame: %p\n", f);
+		if (pml4_is_accessed (cur->pml4, f->page->va)) {	// 접근된 페이지이면
+			pml4_set_accessed (cur->pml4, f->page->va, false);
+			if (list_next (e) == list_end (&frame_table.frame_table))
+				e = list_head (&frame_table.frame_table);
+		}
+		else {
+			victim = f;
+			frame_table.clock_start_elem = (e->next != list_end (&frame_table.frame_table)) ? e->prev : list_head (&frame_table.frame_table);
+			list_remove (e);
+			break;
+		}
+	}
+	// struct list_elem *e = list_pop_back (&frame_table.frame_table);
+	// victim = list_entry (e, struct frame, frame_elem);
 	lock_release (&frame_table.lock);
-	victim = list_entry (e, struct frame, frame_elem);
-	// printf ("im in vm_get_victim (%p)\n", victim);
 	return victim;
 }
 
@@ -195,6 +199,7 @@ vm_evict_frame (void) {
 	/* TODO: swap out the victim and return the evicted frame. */
 	// printf ("im in vm_evict_frame (%p)\n", victim);
 	// printf ("im in vm_evict_frame page (%p)\n", victim->page);
+	
 	if (swap_out (victim->page)) {
 		// victim->page = NULL;
 		palloc_free_page (victim->kva);
@@ -214,7 +219,7 @@ vm_get_frame (void) {
 
 	if (frame != NULL) {
 		frame->kva = palloc_get_page(PAL_USER);
-		while (frame->kva == NULL) {
+		if (frame->kva == NULL) {
 			struct frame *victim = vm_evict_frame ();
 			if (victim) {
 				// victim frame을 가지고 있던 page 구조체의 frame 멤버가 가리키는 주소를 NULL로 초기화
@@ -244,9 +249,9 @@ vm_get_frame (void) {
 // static void
 static void
 vm_stack_growth (void *addr UNUSED) {
-	
-	if(!vm_alloc_page(VM_ANON|VM_MARKER_0, pg_round_down(addr), 1))
-		exit(-1);
+	vm_alloc_page(VM_ANON|VM_MARKER_0, pg_round_down(addr), 1);
+	// if(!vm_alloc_page(VM_ANON|VM_MARKER_0, pg_round_down(addr), 1))
+		// exit(-1);
 	return;
 }
 
@@ -278,6 +283,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	struct page *page = NULL;
 	// printf ("im in page fault : %p\n", addr);
+	// 0x4747ff88
 	if(!not_present){
 		// printf ("	!not present\n");
 		exit (-1);
@@ -350,9 +356,17 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 	// printf("pml4_set_page start \n");
 	if (pml4_get_page(curr->pml4, page->va) == NULL
-		&& pml4_set_page (curr->pml4, page->va, frame->kva, page->writable))
+		&& pml4_set_page (curr->pml4, page->va, frame->kva, page->writable)) {
 		// printf("pml4_set_page finish \n");
+		// printf("help me kva: %p\n", frame);
+		// printf("help me page: %p\n", page);
+		// printf("swap_in: %p\n", page->operations->swap_in);
+		// // 0x8004263918
+		// // false: 0x8004222507
+		// // true:  0x80042226d8
+		// printf("==============end==============\n");
 		return swap_in (page, frame->kva);
+	}
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
 	return false;
 }

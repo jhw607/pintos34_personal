@@ -79,7 +79,7 @@ file_backed_destroy (struct page *page) {
 	// printf ("===== cnt %d ===\n", cnt);
 	if (page->frame != NULL) {	// 추가 조건 for GP
 		lock_acquire (&frame_table.lock);
-		list_remove(&page->frame->frame_elem); // GP
+		list_remove(&page->frame->frame_elem);
 		lock_release (&frame_table.lock);
 		free(page->frame);
 	}

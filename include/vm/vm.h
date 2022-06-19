@@ -113,6 +113,7 @@ struct supplemental_page_table {
 struct frame_table {
 	struct lock lock;
 	struct list frame_table;
+	struct list_elem *clock_start_elem;	// clock algorithm에서 리스트 순회 시작점
 };
 
 struct frame_table frame_table;
