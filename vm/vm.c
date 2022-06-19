@@ -158,8 +158,9 @@ vm_get_victim (void) {
 	struct frame *victim = NULL;
 	 /* TODO: The policy for eviction is up to you. */
 	// struct thread *cur = thread_current ();
-	// struct list_elem *e = list_head (&frame_table);
-	// while ((e = list_next (e)) != list_end (&frame_table)) {
+	// lock_acquire (&frame_table.lock);
+	// struct list_elem *e = list_head (&frame_table.frame_table);
+	// while ((e = list_next (e)) != list_end (&frame_table.frame_table)) {
 	// 	struct frame *f = list_entry (e, struct frame, frame_elem);
 	// 	if (pml4_is_accessed (&cur->pml4, f->page->va) == false) {
 	// 		list_remove (e);
@@ -170,12 +171,15 @@ vm_get_victim (void) {
 	// 	}
 	// }
 	// if (victim == NULL) {
-	// 	e = list_pop_front(&frame_table);
+	// 	e = list_pop_back(&frame_table.frame_table);
 	// 	struct frame *f = list_entry (e, struct frame, frame_elem);
 	// 	victim = f;
 	// }
-	// struct list_elem *e = list_pop_front (&frame_table);
+	// lock_release (&frame_table.lock);
+
 	lock_acquire (&frame_table.lock);
+	// printf("2\n");
+	// printf ("frame table size (%d)\n", list_size (&frame_table.frame_table));
 	struct list_elem *e = list_pop_back (&frame_table.frame_table);
 	lock_release (&frame_table.lock);
 	victim = list_entry (e, struct frame, frame_elem);
@@ -213,12 +217,16 @@ vm_get_frame (void) {
 		while (frame->kva == NULL) {
 			struct frame *victim = vm_evict_frame ();
 			if (victim) {
+				// victim frame을 가지고 있던 page 구조체의 frame 멤버가 가리키는 주소를 NULL로 초기화
+				victim->page->frame = NULL;
+				// victim frame 구조체를 반환
 				free (victim);
 				frame->kva = palloc_get_page(PAL_USER);
 			}
 		}
 		frame->page = NULL;
 		// printf ("im in vm get frame before push back\n");
+		// printf("1\n");
 		lock_acquire (&frame_table.lock);
 		list_push_back(&frame_table.frame_table, &frame->frame_elem);
 		lock_release (&frame_table.lock);
@@ -237,16 +245,9 @@ vm_get_frame (void) {
 static void
 vm_stack_growth (void *addr UNUSED) {
 	
-	if(vm_alloc_page(VM_ANON|VM_MARKER_0, pg_round_down(addr), 1)) {
-
-	}	
-	else{
+	if(!vm_alloc_page(VM_ANON|VM_MARKER_0, pg_round_down(addr), 1))
 		exit(-1);
-	}
-
 	return;
-
-
 }
 
 /* Handle the fault on write_protected page */
@@ -302,6 +303,7 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
  * DO NOT MODIFY THIS FUNCTION. */
 void
 vm_dealloc_page (struct page *page) {
+	// printf ("	vm_dealloc_page\n");
 	destroy (page);
 	free (page);
 }
@@ -483,6 +485,7 @@ void
 spt_destructor (struct hash_elem *h, void *aux){
 
 	struct page *p = hash_entry(h, struct page, hash_elem);
+	// printf ("	spt_destructor\n");
 	vm_dealloc_page(p);
 	
 }
@@ -493,5 +496,10 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
 	hash_destroy(&spt->hash, spt_destructor);
+	// while (!list_empty (&spt->hash))
+	// {
+	// 	struct list_elem *e = list_pop_front (&list);
+	// 	struct page *p = list_entry ();
+	// }
 	
 }

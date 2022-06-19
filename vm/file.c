@@ -47,9 +47,9 @@ static bool
 file_backed_swap_in (struct page *page, void *kva) {
 	struct file_page *file_page UNUSED = &page->file;
 	// ? lock 이거 ?
-	lock_acquire(&filesys_lock);
+	// lock_acquire(&filesys_lock);
 	file_read_at (file_page->file, kva, file_page->read_bytes, file_page->ofs);
-	lock_release(&filesys_lock);
+	// lock_release(&filesys_lock);
 	return true;
 }
 
@@ -59,10 +59,11 @@ file_backed_swap_out (struct page *page) {
 	// printf ("im in file swap out!\n");
 	struct file_page *file_page UNUSED = &page->file;
 	struct thread *cur = thread_current ();
-	if (pml4_is_dirty (&cur->pml4, page->va)) {
+	if (pml4_is_dirty (cur->pml4, page->va)) {
 		file_write_at (file_page->file, page->frame->kva, file_page->read_bytes, file_page->ofs);	// 쓰인 부분 다시 써줘야함
-		pml4_set_dirty (&cur->pml4, page->va, false);
+		pml4_set_dirty (cur->pml4, page->va, false);
 	}
+	pml4_clear_page (cur->pml4, page->va);
 	return true;
 }
 
@@ -71,14 +72,17 @@ static void
 file_backed_destroy (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
 	struct thread *cur = thread_current ();
-	if (pml4_is_dirty (&cur->pml4, page->va)) {
+	if (pml4_is_dirty (cur->pml4, page->va)) {
 		file_write_at (page->file.file, page->frame->kva, page->file.read_bytes, page->file.ofs);	// 쓰인 부분 다시 써줘야함
-		pml4_set_dirty (&cur->pml4, page->va, false);
+		pml4_set_dirty (cur->pml4, page->va, false);
 	}
-	lock_acquire (&frame_table.lock);
-	list_remove(&page->frame->frame_elem);
-	lock_release (&frame_table.lock);
-	free(page->frame);
+	// printf ("===== cnt %d ===\n", cnt);
+	if (page->frame != NULL) {	// 추가 조건 for GP
+		lock_acquire (&frame_table.lock);
+		list_remove(&page->frame->frame_elem); // GP
+		lock_release (&frame_table.lock);
+		free(page->frame);
+	}
 	// if (page->uninit.aux != NULL) free (page->uninit.aux);
 }
 
@@ -154,13 +158,26 @@ do_munmap (void *addr) {
 	struct file *file = NULL;
 	struct page *page = spt_find_page (&cur->spt, temp_addr);
 	if (page == NULL) return;
-	while (page->operations->type == VM_FILE && page->file.mmap_addr == addr) {
-		file = page->file.file;
-		// todo 3: all pages written to by the process are written back to the file, and pages not written must not be.
-		// todo 3: use the file_reopen function to obtain a separate and independent reference to the file for each of its mappings.
-		if (pml4_is_dirty (&cur->pml4, addr)) {
-			file_write_at (page->file.file, page->frame->kva, page->file.read_bytes, page->file.ofs);	// 쓰인 부분 다시 써줘야함
-			pml4_set_dirty (&cur->pml4, addr, false);
+	// while (page->operations->type == VM_FILE && page->file.mmap_addr == addr) {
+	while (page_get_type (page) == VM_FILE) {
+		if (page->operations->type == VM_FILE && page->file.mmap_addr == addr) {
+			// printf("in munmap!\n");
+			// file = page->file.file;
+			// printf ("in memory : %s\n", page->frame->kva);
+			// todo 3: all pages written to by the process are written back to the file, and pages not written must not be.
+			// todo 3: use the file_reopen function to obtain a separate and independent reference to the file for each of its mappings.
+			if (pml4_is_dirty (cur->pml4, addr)) {
+				// printf("is dirty!\n");
+				file_write_at (page->file.file, page->frame->kva, page->file.read_bytes, page->file.ofs);	// 쓰인 부분 다시 써줘야함
+				pml4_set_dirty (cur->pml4, addr, false);
+			}
+		}
+		else if (page->operations->type == VM_UNINIT) {
+			struct aux_lazy_load *temp = page->uninit.aux;
+			if (temp->mmap_addr != addr) return;
+		}
+		else {
+			return;
 		}
 		// todo 3: unmapp
 		spt_remove_page (&cur->spt, page);
