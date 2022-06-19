@@ -33,8 +33,7 @@ vm_anon_init (void) {
 	if (swap_disk == NULL) return;
 	lock_init (&swap_table.lock);
 	swap_table.bitmap = bitmap_create (disk_size (swap_disk)/8);	// page align
-
-	// printf ("swap disk size: %d\n", disk_size(swap_disk));
+	// printf ("swap disk size: %d\n", disk_size(swap_disk)/8);
 }
 
 /* Initialize the file mapping */
@@ -58,7 +57,7 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 /* Swap in the page by read contents from the swap disk. */
 static bool
 anon_swap_in (struct page *page, void *kva) {
-	printf ("im in anon swap in!\n");
+	// printf ("im in anon swap in!\n");
 	struct anon_page *anon_page = &page->anon;
 	int cnt = 0;
 	uint64_t temp_sec_idx = anon_page->sec_no_idx;
@@ -91,9 +90,10 @@ anon_swap_out (struct page *page) {
 			temp_kva += 512;
 		}
 		// disk_write (swap_disk, sec_no_idx, page->frame->kva);
-		// struct thread *cur = thread_current ();
-		// pml4_clear_page (cur->pml4, page->va);
+		struct thread *cur = thread_current ();
+		pml4_clear_page (cur->pml4, page->va);
 		anon_page->sec_no_idx = sec_no_idx;
+		// printf("swap out finish ++++++++\n");
 		return true;
 	}
 	else
@@ -104,10 +104,15 @@ anon_swap_out (struct page *page) {
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
-	void *addr = NULL; addr = "1";
-	list_remove(&page->frame->frame_elem);
-	// palloc_free_page(page->frame->kva); -> pml4에서 pte로 받아서 없애는데 여기서 없애버리면 오류난다!
-	free(page->frame);
+	if(page->frame){
+		lock_acquire(&frame_table.lock);
+		list_remove(&page->frame->frame_elem);
+		lock_release(&frame_table.lock);
+		free(page->frame);
+	}
+	
+	// palloc_free_page(page->frame->kva); //-> pml4에서 pte로 받아서 없애는데 여기서 없애버리면 오류난다!
+	// if (page->frame) free(page->frame);
 	// if (page->uninit.aux != NULL) free (page->uninit.aux);
 	return;
 }

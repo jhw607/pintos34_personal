@@ -9,7 +9,6 @@
 
 unsigned page_hash (const struct hash_elem *p_, void *aux);
 bool page_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux);
-struct list frame_table;
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -25,7 +24,9 @@ vm_init (void) {
 	/* TODO: Your code goes here. */
 	/* --- project3-1 --- */
 	//frame table init 추가, 나중에 swap in, out할 때-> clock algorithm 사용할 때 어차피 순회해야하므로 해시를 사용하지 않음
-	list_init (&frame_table);
+	lock_init (&frame_table.lock);
+	list_init (&frame_table.frame_table);
+	frame_table.clock_start_elem = list_head(&frame_table.frame_table);
 
 }
 
@@ -157,40 +158,53 @@ static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
 	 /* TODO: The policy for eviction is up to you. */
-	// struct thread *cur = thread_current ();
-	// struct list_elem *e = list_head (&frame_table);
-	// while ((e = list_next (e)) != list_end (&frame_table)) {
-	// 	struct frame *f = list_entry (e, struct frame, frame_elem);
-	// 	if (pml4_is_accessed (&cur->pml4, f->page->va) == false) {
-	// 		list_remove (e);
-	// 		victim = f;
-	// 		break;
-	// 	} else {
-	// 		pml4_set_accessed (&cur->pml4, f->page->va, false);
-	// 	}
-	// }
-	// if (victim == NULL) {
-	// 	e = list_pop_front(&frame_table);
-	// 	struct frame *f = list_entry (e, struct frame, frame_elem);
-	// 	victim = f;
-	// }
-	struct list_elem *e = list_pop_back (&frame_table);
-	victim = list_entry (e, struct frame, frame_elem);
-	// printf ("im in vm_get_victim (%p)\n", victim);
+	struct thread *cur = thread_current ();
+	lock_acquire (&frame_table.lock);
+	struct list_elem *e = frame_table.clock_start_elem;
+	while ((e = list_next (e)) != list_end (&frame_table.frame_table)) {
+		struct frame *f = list_entry (e, struct frame, frame_elem);
+		if (pml4_is_accessed (cur->pml4, f->page->va)) {
+			pml4_set_accessed(cur->pml4, f->page->va, false);
+			if( (list_next(e)) == list_end(&frame_table.frame_table)){
+				e = list_head(&frame_table.frame_table);
+			}
+		}
+		else{
+			victim = f;
+			frame_table.clock_start_elem = (e->next != list_end(&frame_table.frame_table)) ? e->prev : list_head(&frame_table.frame_table);
+			list_remove(e);
+			break;
+
+		}
+	}
+	lock_release (&frame_table.lock);
+	// lock_acquire (&frame_table.lock);
+	// struct list_elem *e = list_pop_back (&frame_table.frame_table);
+	// lock_release (&frame_table.lock);
+	// victim = list_entry (e, struct frame, frame_elem);
+	// // printf ("im in vm_get_victim (%p)\n", victim);
 	return victim;
+	
 }
+
+
 
 /* Evict one page and return the corresponding frame.
  * Return NULL on error.*/
 static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
+	struct thread *cur = thread_current();
 	/* TODO: swap out the victim and return the evicted frame. */
 	// printf ("im in vm_evict_frame (%p)\n", victim);
 	// printf ("im in vm_evict_frame page (%p)\n", victim->page);
 	if (swap_out (victim->page)) {
-		victim->page = NULL;
+		// victim->page->frame =NULL;
+		// victim->page = NULL;
 		palloc_free_page (victim->kva);
+		// free(victim);
+		// pml4_clear_page (cur->pml4, victim->page->va);
+		// print("swap out finish +++++ \n");
 		return victim;
 	}
 	return NULL;
@@ -210,13 +224,16 @@ vm_get_frame (void) {
 		while (frame->kva == NULL) {
 			struct frame *victim = vm_evict_frame ();
 			if (victim) {
+				victim->page->frame = NULL;
 				free (victim);
 				frame->kva = palloc_get_page(PAL_USER);
 			}
 		}
 		frame->page = NULL;
 		// printf ("im in vm get frame before push back\n");
-		list_push_back(&frame_table, &frame->frame_elem);
+		lock_acquire (&frame_table.lock);
+		list_push_back(&frame_table.frame_table, &frame->frame_elem);
+		lock_release (&frame_table.lock);
 	} else {
 		PANIC ("TODO");
 	}
@@ -224,6 +241,7 @@ vm_get_frame (void) {
 	/* TODO: Fill this function. */
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
+	// printf("vm_get_frame finish +++++\n");
 	return frame;
 }
 
@@ -232,13 +250,8 @@ vm_get_frame (void) {
 static void
 vm_stack_growth (void *addr UNUSED) {
 	
-	if(vm_alloc_page(VM_ANON|VM_MARKER_0, pg_round_down(addr), 1)) {
-
-	}	
-	else{
-		exit(-1);
-	}
-
+	vm_alloc_page(VM_ANON|VM_MARKER_0, pg_round_down(addr), 1);
+	
 	return;
 
 

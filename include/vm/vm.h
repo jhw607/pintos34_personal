@@ -6,6 +6,7 @@
 #include <list.h>
 #include "threads/mmu.h"
 #include "threads/palloc.h"
+#include "threads/synch.h"
 
 
 enum vm_type {
@@ -80,6 +81,15 @@ struct frame {
 	struct list_elem frame_elem;
 
 };
+struct frame_table frame_table;
+
+struct frame_table {
+	struct lock lock;
+	struct list frame_table;
+	struct list_elem *clock_start_elem;
+};
+
+
 
 
 /* The function table for page operations.

@@ -46,12 +46,24 @@ file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
 static bool
 file_backed_swap_in (struct page *page, void *kva) {
 	struct file_page *file_page UNUSED = &page->file;
+	// ? lock 이거 ?
+	lock_acquire(&filesys_lock);
+	file_read_at (file_page->file, kva, file_page->read_bytes, file_page->ofs);
+	lock_release(&filesys_lock);
+	return true;
 }
 
 /* Swap out the page by writeback contents to the file. */
 static bool
 file_backed_swap_out (struct page *page) {
 	struct file_page *file_page UNUSED = &page->file;
+	struct thread *cur = thread_current ();
+	if (pml4_is_dirty (cur->pml4, page->va)) {
+		file_write_at (file_page->file, page->frame->kva, file_page->read_bytes, file_page->ofs);	// 쓰인 부분 다시 써줘야함
+		pml4_set_dirty (cur->pml4, page->va, false);
+	}
+	pml4_clear_page(cur->pml4, page->va);
+	return true;
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */
@@ -61,11 +73,14 @@ file_backed_destroy (struct page *page) {
 	struct thread *cur = thread_current ();
 	if (pml4_is_dirty (cur->pml4, page->va)) {
 		file_write_at (page->file.file, page->frame->kva, page->file.read_bytes, page->file.ofs);	// 쓰인 부분 다시 써줘야함
-		pml4_set_dirty (&cur->pml4, page->va, false);
+		pml4_set_dirty (cur->pml4, page->va, false);
 	}
-	list_remove(&page->frame->frame_elem); // todo : frame table lock 필요
-	free(page->frame);
-	// if (page->uninit.aux != NULL) free (page->uninit.aux);
+	if (page->frame != NULL) {	// 추가 조건 for GP
+		lock_acquire (&frame_table.lock);
+		list_remove(&page->frame->frame_elem); // GP
+		lock_release (&frame_table.lock);
+		free(page->frame);
+	}
 }
 
 
@@ -146,7 +161,7 @@ do_munmap (void *addr) {
 		// todo 3: use the file_reopen function to obtain a separate and independent reference to the file for each of its mappings.
 		if (pml4_is_dirty (cur->pml4, addr)) {
 			file_write_at (page->file.file, page->frame->kva, page->file.read_bytes, page->file.ofs);	// 쓰인 부분 다시 써줘야함
-			pml4_set_dirty (&cur->pml4, addr, false);
+			pml4_set_dirty (cur->pml4, addr, false);
 		}
 		// todo 3: unmapp
 		spt_remove_page (&cur->spt, page);

@@ -405,7 +405,8 @@ test_max_priority(void) {
 	t = list_entry(max, struct thread, elem);
 
 	if (t->priority > thread_get_priority())
-		thread_yield();
+		if (!intr_context())
+			thread_yield();
 	
 	
 }
