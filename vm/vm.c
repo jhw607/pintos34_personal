@@ -27,6 +27,7 @@ vm_init (void) {
 	//frame table init 추가, 나중에 swap in, out할 때-> clock algorithm 사용할 때 어차피 순회해야하므로 해시를 사용하지 않음
 	lock_init (&frame_table.lock);
 	list_init (&frame_table.frame_table);
+	frame_table.clock_start_elem = list_head(&frame_table.frame_table);
 }
 
 /* Returns a hash value for page p. */
@@ -157,28 +158,37 @@ static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
 	 /* TODO: The policy for eviction is up to you. */
-	// struct thread *cur = thread_current ();
-	// struct list_elem *e = list_head (&frame_table);
-	// while ((e = list_next (e)) != list_end (&frame_table)) {
-	// 	struct frame *f = list_entry (e, struct frame, frame_elem);
-	// 	if (pml4_is_accessed (&cur->pml4, f->page->va) == false) {
-	// 		list_remove (e);
-	// 		victim = f;
-	// 		break;
-	// 	} else {
-	// 		pml4_set_accessed (&cur->pml4, f->page->va, false);
-	// 	}
-	// }
+	struct thread *cur = thread_current ();
+	
+	lock_acquire (&frame_table.lock);
+
+	struct list_elem *e = frame_table.clock_start_elem;
+	while ((e = list_next (e)) != list_end (&frame_table)) {
+		struct frame *f = list_entry (e, struct frame, frame_elem);
+		if (pml4_is_accessed (&cur->pml4, f->page->va) ) {
+			pml4_set_accessed (&cur->pml4, f->page->va, false);
+			if(list_next(e) == list_end(&frame_table.frame_table))
+				e = list_head(&frame_table.frame_table);
+		} 
+		else {
+			victim = f;
+			list_remove (e);
+			frame_table.clock_start_elem = (victim->frame_elem.next != list_end(&frame_table.frame_table)) ? victim->frame_elem.prev : list_head(&frame_table.frame_table);
+			break;
+		}
+	}
+	// e->next != list_end(&frame_table.frame_table) ? e->prev : (&frame_table.frame_table);
 	// if (victim == NULL) {
 	// 	e = list_pop_front(&frame_table);
 	// 	struct frame *f = list_entry (e, struct frame, frame_elem);
 	// 	victim = f;
 	// }
 	// struct list_elem *e = list_pop_front (&frame_table);
-	lock_acquire (&frame_table.lock);
-	struct list_elem *e = list_pop_back (&frame_table.frame_table);
+	// struct list_elem *e = list_pop_back (&frame_table.frame_table);
+	
 	lock_release (&frame_table.lock);
-	victim = list_entry (e, struct frame, frame_elem);
+
+	// victim = list_entry (e, struct frame, frame_elem);
 	// printf ("im in vm_get_victim (%p)\n", victim);
 	return victim;
 }
@@ -211,8 +221,9 @@ vm_get_frame (void) {
 	if (frame != NULL) {
 		frame->kva = palloc_get_page(PAL_USER);
 		while (frame->kva == NULL) {
-			struct frame *victim = vm_evict_frame ();
+			struct frame *victim = vm_evict_frame ();	// palloc_free(kva) 해서 줌
 			if (victim) {
+				victim->page->frame = NULL;	// !
 				free (victim);
 				frame->kva = palloc_get_page(PAL_USER);
 			}
@@ -281,7 +292,6 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		// printf ("	!not present\n");
 		exit (-1);
 	}
-
 	void * rsp = (void *)(user ? f->rsp : thread_current()->rsp);
 	if((USER_STACK > addr && addr > rsp) || (rsp - addr) == 0x8){		// USER_STACK ~ rsp - 8 이내의 요청인지 확인
 		// printf ("	stack\n");
