@@ -15,6 +15,24 @@
 #include "kernel/stdio.h"
 #include "threads/palloc.h"
 /* ------------------------------- */
+#include "vm/vm.h"
+
+
+/* System call.
+ *
+ * Previously system call services was handled by the interrupt handler
+ * (e.g. int 0x80 in linux). However, in x86-64, the manufacturer supplies
+ * efficient path for requesting the system call, the `syscall` instruction.
+ *
+ * The syscall instruction works by reading the values from the the Model
+ * Specific Register (MSR). For the details, see the manual. */
+
+#define MSR_STAR 0xc0000081         /* Segment selector msr */
+#define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
+#define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
+
+const int STDIN = 1;
+const int STDOUT = 2;
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
@@ -35,29 +53,15 @@ int write(int fd, void *buffer, unsigned size);
 void seek(int fd, unsigned position);
 unsigned tell(int fd);
 void close(int fd);
-
+void *mmap (void *addr, size_t length, int writable, int fd, off_t offset);
+void munmap (void *addr);
 
 /* Syscall helper Functions */
-static struct file *find_file_by_fd(int fd);
 int add_file_to_fdt(struct file *file);
 void remove_file_from_fdt(int fd);
 
-
-/* System call.
- *
- * Previously system call services was handled by the interrupt handler
- * (e.g. int 0x80 in linux). However, in x86-64, the manufacturer supplies
- * efficient path for requesting the system call, the `syscall` instruction.
- *
- * The syscall instruction works by reading the values from the the Model
- * Specific Register (MSR). For the details, see the manual. */
-
-#define MSR_STAR 0xc0000081         /* Segment selector msr */
-#define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
-#define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
-
-const int STDIN = 1;
-const int STDOUT = 2;
+/* project 3 */
+void check_buf(void *addr);
 
 void
 syscall_init (void) {
@@ -79,6 +83,7 @@ syscall_init (void) {
 void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
+	thread_current()->rsp = f->rsp;
 	int sys_number = f->R.rax;
 	switch (sys_number){
 
@@ -139,6 +144,14 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			 close(f->R.rdi);
 			 break;
 
+		case SYS_MMAP:
+			f->R.rax = mmap (f->R.rdi, f->R.rsi, f->R.rdx, f->R.r10, f->R.r8);
+			break;
+
+		case SYS_MUNMAP:
+			munmap (f->R.rdi);
+			break;
+
 		default:
 			// printf ("system call!\n");
 			// thread_exit ();
@@ -152,17 +165,42 @@ syscall_handler (struct intr_frame *f UNUSED) {
 
 /* ---- Project 2: User memory Access ----*/
 // pml4_get_page(page map, addr(유저 가상주소)) : 유저 가상주소와 대응하는 물리주소를 확인하여 해당 물리주소와 연결된 커널 가상 주소를 반환하거나 만약 해당 물리주소가 가상 주소와 매핑되지 않은 영역이면 NULL 반환
+// void
+// check_address(void *addr)
+// {	
+// 	struct thread *t = thread_current(); // 현재 스레드의 thread 구조체를 사용하기 위해서 t를 선언
+// 	if (!is_user_vaddr(addr)||addr==NULL||pml4_get_page(t->pml4, addr)==NULL){
+// 		// 해당 주소값이 유저 가상 주소에 해당하지 않고 or addr = Null or 유저 가상주소가 물리주소와 매핑되지 않은 영역
+
+// 		exit(-1);
+// 	}
+
+// }
+
 void
 check_address(void *addr)
 {	
 	struct thread *t = thread_current(); // 현재 스레드의 thread 구조체를 사용하기 위해서 t를 선언
-	if (!is_user_vaddr(addr)||addr==NULL||pml4_get_page(t->pml4, addr)==NULL){
-		// 해당 주소값이 유저 가장 주소에 해당하지 않고 or addr = Null or 유저 가상주소가 물리주소와 매핑되지 않은 영역
+	if (!is_user_vaddr(addr)||addr==NULL){
+		// 해당 주소값이 유저 가상 주소에 해당하지 않고 or addr = Null or 유저 가상주소가 물리주소와 매핑되지 않은 영역
 
 		exit(-1);
 	}
 
 }
+
+void check_buf(void *addr){
+	struct thread *t = thread_current();
+
+	struct page *p = spt_find_page(&t->spt, addr);
+	if(p!=NULL && !p->writable){
+		// printf(">> p->writable : %d\n",p->writable);
+		exit(-1);
+	}
+
+}
+
+
 
 /* project 2 : System Call */
 
@@ -235,7 +273,7 @@ int wait(tid_t pid)
 
 /* Project 2 : File Descriptor */
 
-static struct file *find_file_by_fd(int fd)
+struct file *find_file_by_fd(int fd)
 {
 	if (fd < 0 || fd >= FDCOUNT_LIMIT){
 		return NULL;
@@ -263,9 +301,9 @@ int add_file_to_fdt(struct file *file)
     }
 
     // error - fd table full
-    if (cur->fd_idx >= FDCOUNT_LIMIT)
+    if (cur->fd_idx >= FDCOUNT_LIMIT){
         return -1;
-
+	}
     fdt[cur->fd_idx] = file;
     return cur->fd_idx;
 }
@@ -292,6 +330,13 @@ int open(const char *file) // 파일 객체에 대한 파일 디스크립터 부
 	lock_acquire(&filesys_lock);
 
 	struct file *file_obj = filesys_open(file);
+	// printf("=== open ===\n");
+	// printf("file name: %s\n", file);
+	// printf("file inode: %p\n", file_obj->inode);
+	// char * buf1[100];
+	// file_read_at (file_obj, buf1, 100, 0);
+	// printf("read file:  %s \n", buf1);
+	// printf("=== open ===\n");
 
 	if (file_obj == NULL){
 		return -1;
@@ -340,6 +385,7 @@ int read(int fd, void *buffer, unsigned size)
 	
 	check_address(buffer);
 	check_address(buffer+size-1);
+	check_buf(buffer);
 	int read_count; // 글자수 카운트 용(for문 사용하기 위해)
 	struct thread *cur = thread_current();
 	struct file *file_obj = find_file_by_fd(fd);
@@ -382,6 +428,7 @@ int read(int fd, void *buffer, unsigned size)
 int write(int fd, void *buffer, unsigned size)
 {
 	check_address(buffer);
+	// check_buf(buffer);
 	int read_count; // 글자수 카운트 용(for문 사용하기 위해)
 	struct file *file_obj = find_file_by_fd(fd);
 	unsigned char *buf = buffer;
@@ -449,4 +496,33 @@ void close(int fd)
 	remove_file_from_fdt(fd);
 
 
+}
+
+void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
+	struct thread *curr = thread_current ();
+	if (is_kernel_vaddr (addr)) return NULL;
+	// todo : the file descriptors representing console input and output are not mappable.
+	if (fd < 2) return NULL;
+	// todo : A call to mmap may fail if the file opened as fd has a length of zero bytes.
+	if (filesize (fd) <= 0) return NULL;
+	// todo : It must fail if addr is not page-aligned 
+	if (pg_ofs (addr) != 0) return NULL;
+	// printf("	pg_ofs (addr) != 0 : %d\n", pg_ofs (addr));
+	if (pg_ofs (offset) != 0) return NULL;
+	// printf("	pg_ofs (offset) != 0 : %d\n", pg_ofs (offset));
+	// todo : if addr is 0, it must fail, because some Pintos code assumes virtual page 0 is not mapped.
+	if (addr == 0) return NULL;
+	// todo : Your mmap should also fail when length is zero.
+	if ((long)length <= 0) return NULL;
+	// // todo : length가 page align인지 확인
+	// if (length % PGSIZE != 0) return NULL;
+	struct file *file = find_file_by_fd (fd);
+	if (file == NULL) return NULL;
+	// printf ("	im in mmap! %p\n", addr);
+	// printf("	fd : %d\n", fd);
+	return do_mmap (addr, length, writable, file, offset);
+}
+
+void munmap (void *addr) {
+	do_munmap (addr);
 }
