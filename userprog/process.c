@@ -825,21 +825,15 @@ lazy_load_segment (struct page *page, void *aux) {
 	off_t aux_ofs = aux_box->ofs;
 	size_t page_read_bytes = aux_box->read_bytes;
 	size_t page_zero_bytes = aux_box->zero_bytes;
-	// printf("aux_ofs: %d\n page_read_bytes : %d\n page_zero_bytes : %d\n", aux_ofs, page_read_bytes, page_zero_bytes);
-	// printf("lazy_load_segment start\n");
 	file_seek(file, aux_ofs); 
 	/* 이미 만들어져 있으니까 load만 하면된다 */
 	/* Load this page */
-	// 실패시 palloc free 하는것이 맞나?
 	if (file_read(file, page->frame->kva, page_read_bytes) != (int) page_read_bytes){
-		// palloc_free_page(page->frame->kva);
 		return false;
 	}
 
 	memset (page->frame->kva + page_read_bytes, 0, page_zero_bytes);	
-	// printf("lazy_load_segment finish\n");
 	free(aux);
-	//return은 뭘로?, 안해도 되나?
 	return true;
 
 }
@@ -864,7 +858,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
-	// printf("load segment sssstart\n");
 	while (read_bytes > 0 || zero_bytes > 0) {
 		/* Do calculate how to fill this page.
 		 * We will read PAGE_READ_BYTES bytes from FILE
@@ -873,26 +866,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
 		struct aux_lazy_load *aux_box = malloc(sizeof (struct aux_lazy_load));
-		// *aux_box=(struct aux_lazy_load)
-		// {
-		// 		.file = file,
-		// 		.ofs = ofs,
-		// 		// .upage = upage,
-		// 		.read_bytes = page_read_bytes,
-		// 		.zero_bytes = page_zero_bytes,
-		// 		// .writable = writable, 
-		// };
 		aux_box->file = file;
 		aux_box->ofs = ofs;
 		aux_box->read_bytes = page_read_bytes;
 		aux_box->zero_bytes = page_zero_bytes;
 
-		// printf("load segment start\n");
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, aux_box))
 			return false;
-		// printf("load segment finish\n");
-
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
@@ -914,7 +895,6 @@ bool
 setup_stack (struct intr_frame *if_) {
 	bool success = false;
 	void *stack_bottom = (void *) (((uint8_t *) USER_STACK) - PGSIZE);
-	// printf("setup_stack start\n");
 	/* TODO: Map the stack on stack_bottom and claim the page immediately.
 	 * TODO: If success, set the rsp accordingly.
 	 * TODO: You should mark the page is stack. */

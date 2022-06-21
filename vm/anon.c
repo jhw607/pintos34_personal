@@ -33,21 +33,18 @@ vm_anon_init (void) {
 	if (swap_disk == NULL) return;
 	lock_init (&swap_table.lock);
 	swap_table.bitmap = bitmap_create (disk_size (swap_disk)/8);	// page align
-	// printf ("swap disk size: %d\n", disk_size(swap_disk)/8);
-}
+	}
 
 /* Initialize the file mapping */
 bool
 anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
-	// printf("anon_initializer Start \n");
 	page->operations = &anon_ops;
 	struct anon_page *anon_page = &page->anon;
 	if(type & VM_MARKER_0)
 		anon_page->is_stack = 1;
 	else
 		anon_page->is_stack = 0;
-	// printf("anon_initializer FINISH \n");
 	anon_page->sec_no_idx = NULL;
 
 	return true;
@@ -57,7 +54,6 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 /* Swap in the page by read contents from the swap disk. */
 static bool
 anon_swap_in (struct page *page, void *kva) {
-	// printf ("im in anon swap in!\n");
 	struct anon_page *anon_page = &page->anon;
 	int cnt = 0;
 	uint64_t temp_sec_idx = anon_page->sec_no_idx;
@@ -67,18 +63,15 @@ anon_swap_in (struct page *page, void *kva) {
 		cnt += 1;
 		temp_kva += 512;
 	}
-	// disk_read (swap_disk, anon_page->sec_no_idx, kva);
 	bitmap_set_multiple (swap_table.bitmap, anon_page->sec_no_idx, 1, false);
 }
 
 /* Swap out the page by writing contents to the swap disk. */
 static bool
 anon_swap_out (struct page *page) {
-	// printf ("im in anon swap out!\n");
 	struct anon_page *anon_page = &page->anon;
 	lock_acquire (&swap_table.lock);
 	uint64_t sec_no_idx = bitmap_scan_and_flip (swap_table.bitmap, 0, 1, false);
-	// printf("sec_no_idx: %d\n", sec_no_idx);
 	lock_release (&swap_table.lock);
 
 	if (sec_no_idx != BITMAP_ERROR) {
@@ -89,11 +82,9 @@ anon_swap_out (struct page *page) {
 			cnt += 1;
 			temp_kva += 512;
 		}
-		// disk_write (swap_disk, sec_no_idx, page->frame->kva);
 		struct thread *cur = thread_current ();
 		pml4_clear_page (cur->pml4, page->va);
 		anon_page->sec_no_idx = sec_no_idx;
-		// printf("swap out finish ++++++++\n");
 		return true;
 	}
 	else
@@ -110,9 +101,5 @@ anon_destroy (struct page *page) {
 		lock_release(&frame_table.lock);
 		free(page->frame);
 	}
-	
-	// palloc_free_page(page->frame->kva); //-> pml4에서 pte로 받아서 없애는데 여기서 없애버리면 오류난다!
-	// if (page->frame) free(page->frame);
-	// if (page->uninit.aux != NULL) free (page->uninit.aux);
 	return;
 }

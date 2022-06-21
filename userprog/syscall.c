@@ -194,7 +194,6 @@ void check_buf(void *addr){
 
 	struct page *p = spt_find_page(&t->spt, addr);
 	if(p!=NULL && !p->writable){
-		// printf(">> p->writable : %d\n",p->writable);
 		exit(-1);
 	}
 
@@ -242,7 +241,6 @@ bool remove(const char *file){
 /* Project 2 : Process structure (fork) */
 
 tid_t fork (const char *thread_name, struct intr_frame *f) {
-	// check_address(thread_name);
 	return process_fork(thread_name, f);// child thread namedl 들어온다
 }
 
@@ -330,13 +328,6 @@ int open(const char *file) // 파일 객체에 대한 파일 디스크립터 부
 	lock_acquire(&filesys_lock);
 
 	struct file *file_obj = filesys_open(file);
-	// printf("=== open ===\n");
-	// printf("file name: %s\n", file);
-	// printf("file inode: %p\n", file_obj->inode);
-	// char * buf1[100];
-	// file_read_at (file_obj, buf1, 100, 0);
-	// printf("read file:  %s \n", buf1);
-	// printf("=== open ===\n");
 
 	if (file_obj == NULL){
 		return -1;
@@ -514,12 +505,8 @@ void *mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
 	if (addr == 0) return NULL;
 	// todo : Your mmap should also fail when length is zero.
 	if ((long)length <= 0) return NULL;
-	// // todo : length가 page align인지 확인
-	// if (length % PGSIZE != 0) return NULL;
 	struct file *file = find_file_by_fd (fd);
 	if (file == NULL) return NULL;
-	// printf ("	im in mmap! %p\n", addr);
-	// printf("	fd : %d\n", fd);
 	return do_mmap (addr, length, writable, file, offset);
 }
 
