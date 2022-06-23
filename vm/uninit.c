@@ -51,8 +51,6 @@ uninit_initialize (struct page *page, void *kva) {
 	vm_initializer *init = uninit->init;
 	void *aux = uninit->aux;
 	/* TODO: You may need to fix this function. */
-	// printf("uninit_initialize SWAP IN FINISH \n");
-	// printf("hihi\n");
 	return uninit->page_initializer (page, uninit->type, kva) &&
 		(init ? init (page, aux) : true);
 }
@@ -66,7 +64,6 @@ uninit_destroy (struct page *page) {
 	struct uninit_page *uninit UNUSED = &page->uninit;
 	/* TODO: Fill this function.
 	 * TODO: If you don't have anything to do, just return. */
-	// printf ("im in uninit swap out!\n");
 	free(page->uninit.aux);
 	return;
 

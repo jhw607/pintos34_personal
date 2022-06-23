@@ -34,26 +34,19 @@ vm_anon_init (void) {
 	lock_init (&swap_table.lock);
 	swap_table.bitmap = bitmap_create (disk_size (swap_disk)/8);	// page align
 
-	// printf ("swap disk size: %d\n", disk_size(swap_disk));
 }
 
 /* Initialize the file mapping */
 bool
 anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
-	// printf("anon_initializer Start \n");
 	page->operations = &anon_ops;
 	struct anon_page *anon_page = &page->anon;
 	if(type & VM_MARKER_0)
 		anon_page->is_stack = 1;
 	else
 		anon_page->is_stack = 0;
-	// printf("anon_initializer FINISH \n");
 	anon_page->sec_no_idx = NULL;
-	// printf("==============start==============\n");
-	// printf("anon_swap_in: %p:\n", anon_swap_in);
-	// printf("sibal: %p:\n", page->operations->swap_in);
-
 	return true;
 	
 }
@@ -61,20 +54,18 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 /* Swap in the page by read contents from the swap disk. */
 static bool
 anon_swap_in (struct page *page, void *kva) {
-	// printf ("im in anon swap in!\n");
-	// printf("help me--: %p\n", page);
 	struct anon_page *anon_page = &page->anon;
 	int cnt = 0;
 	uint64_t temp_sec_idx = anon_page->sec_no_idx;
 	void *temp_kva = kva;
-	// 0x8004263918
 	while (cnt < 8) {
 		disk_read (swap_disk, temp_sec_idx * 8 + cnt, temp_kva);
 		cnt += 1;
 		temp_kva += 512;
 	}
-	// disk_read (swap_disk, anon_page->sec_no_idx, kva);
+	// lock_acquire (&swap_table.lock);
 	bitmap_set_multiple (swap_table.bitmap, anon_page->sec_no_idx, 1, false);
+	// lock_release (&swap_table.lock);
 }
 
 /* Swap out the page by writing contents to the swap disk. */
@@ -82,11 +73,8 @@ static bool
 anon_swap_out (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
 	lock_acquire (&swap_table.lock);
-	// printf("4");
 	uint64_t sec_no_idx = bitmap_scan_and_flip (swap_table.bitmap, 0, 1, false);
-	// printf ("swap out va : %p\n",page->va);
-	// 0x4747ff88
-	// printf("sec_no_idx: %d\n", sec_no_idx);
+	// ? 가지고 오는 건 인덱스 
 	lock_release (&swap_table.lock);
 
 	if (sec_no_idx != BITMAP_ERROR) {
@@ -97,11 +85,9 @@ anon_swap_out (struct page *page) {
 			cnt += 1;
 			temp_kva += 512;
 		}
-		// disk_write (swap_disk, sec_no_idx, page->frame->kva);
 		struct thread *cur = thread_current ();
 		pml4_clear_page (cur->pml4, page->va);
 		anon_page->sec_no_idx = sec_no_idx;
-		// printf ("im in anon swap out!\n");
 		return true;
 	}
 	else
@@ -112,16 +98,15 @@ anon_swap_out (struct page *page) {
 static void
 anon_destroy (struct page *page) {
 	struct anon_page *anon_page = &page->anon;
-	// void *addr = NULL; addr = "1"; // debugging
-	// printf("	anon_destroy\n");
-	// printf("		after list remove\n");
+	// ! debugging !
+	// ! before : 조건 없었음
+	// ! -> frame이 swap out 돼서 없는 페이지도 있을 수 있음  
+	// ! after : if(page->frame != NULL) 검사
 	if (page->frame != NULL) {
 		lock_acquire (&frame_table.lock);
 		list_remove(&page->frame->frame_elem);
 		lock_release (&frame_table.lock);
 		free(page->frame);
 	}
-	// palloc_free_page(page->frame->kva); -> pml4에서 pte로 받아서 없애는데 여기서 없애버리면 오류난다!
-	// if (page->uninit.aux != NULL) free (page->uninit.aux);
 	return;
 }

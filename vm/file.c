@@ -162,7 +162,7 @@ do_munmap (void *addr) {
 	while (page_get_type (page) == VM_FILE) {
 		if (page->operations->type == VM_FILE && page->file.mmap_addr == addr) {
 			// printf("in munmap!\n");
-			// file = page->file.file;
+			file = page->file.file;
 			// printf ("in memory : %s\n", page->frame->kva);
 			// todo 3: all pages written to by the process are written back to the file, and pages not written must not be.
 			// todo 3: use the file_reopen function to obtain a separate and independent reference to the file for each of its mappings.
