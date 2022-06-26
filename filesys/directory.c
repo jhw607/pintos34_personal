@@ -5,11 +5,14 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
+#include "filesys/fat.h"
 
 /* A directory. */
 struct dir {
 	struct inode *inode;                /* Backing store. */
 	off_t pos;                          /* Current position. */
+	struct dir *parent_dir;	// ! 부모 디렉토리
 };
 
 /* A single directory entry. */
@@ -19,25 +22,66 @@ struct dir_entry {
 	bool in_use;                        /* In use or free? */
 };
 
+static int dir_cnt;	// ! 전체 디렉토리 수
+
+// ! helper function
+// ! 부모 디렉토리 가져오기
+// ? 루트 디렉토리인 경우에는? -> 호출처에서 확인 (루트의 부모도 루트)
+struct dir *get_parent_dir (struct dir *dir) {
+	return dir->parent_dir;
+}
+// ! 부모 디렉토리 설정하기
+// ? 한줄짜리 함수로 굳이 필요하나 싶지만 이 코드에서는 syscall에서 사용중
+void set_parent_dir (struct dir *dir, struct dir *pdir) {
+	dir->parent_dir = pdir;
+}
+
 /* Creates a directory with space for ENTRY_CNT entries in the
  * given SECTOR.  Returns true if successful, false on failure. */
+// ! entry_cnt 개의 엔트리를 가지는 디렉토리를 sector에 추가
 bool
 dir_create (disk_sector_t sector, size_t entry_cnt) {
-	return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+	// return inode_create (sector, entry_cnt * sizeof (struct dir_entry));
+	bool success = inode_create (sector, entry_cnt * sizeof (struct dir_entry));	// ! 섹터에 아이노드 생성
+
+	if (success) {
+		if (dir_cnt + 1 > DISK_SECTOR_SIZE)	// ! 디렉토리를 추가했을시 전체 디렉토리 갯수가 디스크 섹터 사이즈 보다 커진다면, 추가 불가
+			return false;
+		struct inode *dir_inode = inode_open (sector);	// ! 지정된 섹터에 아이노드를 읽어옴
+		inode_set_dir (dir_inode);
+		struct dir *dir = dir_open (dir_inode);
+
+		dir_add (dir, ".", sector);	// ! 자기자신(.)
+		dir->parent_dir = thread_current ()->current_dir;	// ! 새로 생성한 디렉토리의 부모는 현재 디렉토리, set_parent_dir써도 뭐,,
+
+		// ! 해당 섹터가 루트 디렉토리가 아니라면 부모 디렉토리(..)를 위한 디렉토리 entry 추가
+		if (sector != cluster_to_sector (ROOT_DIR_CLUSTER)) {
+			dir_add (dir, "..", inode_get_inumber (dir->parent_dir->inode));
+		} else {
+			// ! 루트인 경우에는 부모도 루트로 지정
+			dir_add (dir, "..", sector);
+		}
+
+		inode_close (dir_inode);
+	}
+
+	return success;
 }
 
 /* Opens and returns the directory for the given INODE, of which
  * it takes ownership.  Returns a null pointer on failure. */
+// ! 주어진 inode의 디렉토리 구조체 가져오기
 struct dir *
 dir_open (struct inode *inode) {
 	struct dir *dir = calloc (1, sizeof *dir);
-	if (inode != NULL && dir != NULL) {
+	if (inode != NULL && dir != NULL) {	// ! 인자 확인, 할당 확인
 		dir->inode = inode;
 		dir->pos = 0;
+		dir->parent_dir = thread_current ()->current_dir;	// ! 부모 디렉토리는 현재 디렉토리
 		return dir;
 	} else {
 		inode_close (inode);
-		free (dir);
+		free (dir);	 // ? 할당에 실패한 경우에는 반환할게 없을 텐데?
 		return NULL;
 	}
 }
@@ -46,17 +90,30 @@ dir_open (struct inode *inode) {
  * Return true if successful, false on failure. */
 struct dir *
 dir_open_root (void) {
+#ifndef EFILESYS
 	return dir_open (inode_open (ROOT_DIR_SECTOR));
+#else
+	return dir_open (inode_open (cluster_to_sector(ROOT_DIR_SECTOR)));	// ! cluster로 관리
+#endif
 }
 
 /* Opens and returns a new directory for the same inode as DIR.
  * Returns a null pointer on failure. */
+// ! dir와 동일한 inode의 디렉토리를 오픈
 struct dir *
 dir_reopen (struct dir *dir) {
+#ifndef EFILESYS
 	return dir_open (inode_reopen (dir->inode));
+#else
+	struct dir *re_dir = dir_open (inode_reopen (dir->inode));
+	if (re_dir->parent_dir == NULL)	// ? 부모가 설정되어 있지 않은 경우 루트를 열어주는 이유 ?
+		re_dir->parent_dir = dir_open_root ();
+	return re_dir;
+#endif
 }
 
 /* Destroys DIR and frees associated resources. */
+// ! dir를 닫기 (dir 구조체 할당 해제, inode close)
 void
 dir_close (struct dir *dir) {
 	if (dir != NULL) {
@@ -165,6 +222,7 @@ done:
 /* Removes any entry for NAME in DIR.
  * Returns true if successful, false on failure,
  * which occurs only if there is no file with the given NAME. */
+// ! 해당 이름의 디렉토리 엔트리를 찾아서 삭제 표시(in_use = false)
 bool
 dir_remove (struct dir *dir, const char *name) {
 	struct dir_entry e;
@@ -201,12 +259,16 @@ done:
 /* Reads the next directory entry in DIR and stores the name in
  * NAME.  Returns true if successful, false if the directory
  * contains no more entries. */
+// ! dir의 다음 디렉토리 엔트리를 읽고, 그 이름을 name에 저장, 더이상 디렉토리 엔트리가 없으면 return false
 bool
 dir_readdir (struct dir *dir, char name[NAME_MAX + 1]) {
 	struct dir_entry e;
 
 	while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e) {
 		dir->pos += sizeof e;
+		if (!strcmp (e.name, ".") || !strcmp (e.name, "..")) {	// ? 자기 자신과 부모는 넘어감
+			continue;
+		}
 		if (e.in_use) {
 			strlcpy (name, e.name, NAME_MAX + 1);
 			return true;
