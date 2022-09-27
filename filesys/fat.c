@@ -152,11 +152,32 @@ fat_boot_create (void) {
 
 void
 fat_fs_init (void) {
-	/* TODO: Your code goes here. */
+	/* TODO: Your code goes here. */\
+	// FAT 파일시스템을 초기화
+	// fat_bs->dp 저장된 일부값을 이용할 수 있음, 다른 초기화도 가능
+	// todo: fat_length와 data_start 필드를 초기화
+	// todo: fat_length : 클러스터 수
+	// todo: data_start : 파일저장을 시작할 수 있는 섹터
+	
+	fat_fs->fat_length = disk_size(filesys_disk) - fat_fs->bs.fat_sectors -1;
+	fat_fs->data_start = (disk_sector_t)(fat_fs->bs.fat_start + fat_fs->bs.fat_sectors);
+	fat_fs->last_clst = (cluster_t)(fat_fs->bs.root_dir_cluster +1);
+	lock_init(&fat_fs->write_lock);
+
+
+	
 }
 
 /*----------------------------------------------------------------------------*/
-/* FAT handling                                                               */
+/* FAT handling            
+ * FAT는 sector상에서 첫번째 데이터의 섹터번호에 두번째 데이터의 섹터번호가 저장되고
+ * 같은 방법으로 마지막 데이터의 섹터번호 인덱스에 -1(EOChain)이 나올때까지 반복되는 방식
+ * 애초에 첫데이터는 없고 inode에서 찾은 다음 그다음 데이터에 대해서만 가지고 있음
+ ? create이나 remove는 FAT 에 추가하고 지우는 거 같고..?
+ ? put은 같은 파일의 순서나 체인이 바뀌는 건가봄?
+ ? get은 다음꺼 찾는거 같고..
+ ? to_sector는 섹터번호 가져오는 거?
+   */
 /*----------------------------------------------------------------------------*/
 
 /* Add a cluster to the chain.
@@ -165,6 +186,14 @@ fat_fs_init (void) {
 cluster_t
 fat_create_chain (cluster_t clst) {
 	/* TODO: Your code goes here. */
+	// clst에 지정된 클러스터 뒤에 클러스터를 추가해서 체인을 확장
+	// todo: 클러스터를 관리하는 리스트에 추가
+	// todo: 새로 할당된 클러스터 번호를 반환
+	if(clst==0){
+		// todo: 0이면 새 체인 시작
+	}
+
+
 }
 
 /* Remove the chain of clusters starting from CLST.
@@ -172,22 +201,36 @@ fat_create_chain (cluster_t clst) {
 void
 fat_remove_chain (cluster_t clst, cluster_t pclst) {
 	/* TODO: Your code goes here. */
+	// clst에서 시작해서 체인에서 클러스터를 제거
+	// todo: pclst가 바로 직전 클러스터인지 확인해야하나?
+	// ? pclst가 업데이트된 마지막 요소여야함 -> ???
+	// todo: 리스트에서 제거
+
 }
 
 /* Update a value in the FAT table. */
 void
 fat_put (cluster_t clst, cluster_t val) {
 	/* TODO: Your code goes here. */
+	// clst 클러스터번호가 가리키는 FAT를 val로 업데이트
+	// FAT의 항목은 다음 클러스터를 가리킴, 연결을 업데이트
+	// todo: FAT의 clst의 값을 val로 바꿈
+	// todo: 그럼 원래거는 지워야함?
+	
 }
 
 /* Fetch a value in the FAT table. */
 cluster_t
 fat_get (cluster_t clst) {
 	/* TODO: Your code goes here. */
+	// 주어진 clst가 가리키는 클러스터 번호를 반환
+	// todo: FAT 테이블에서 clst가 가리키는 다음 번호를 가져오는거 같음
 }
 
 /* Covert a cluster # to a sector number. */
 disk_sector_t
 cluster_to_sector (cluster_t clst) {
 	/* TODO: Your code goes here. */
+	// 클러스터 번호 clst를 해당 섹터번호로 바꾸고 섹터번호를 반환
+	// todo: 클러스터 번호가 가리키는?
 }

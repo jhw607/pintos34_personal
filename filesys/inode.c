@@ -17,6 +17,9 @@ struct inode_disk {
 	off_t length;                       /* File size in bytes. */
 	unsigned magic;                     /* Magic number. */
 	uint32_t unused[125];               /* Not used. */
+	
+	// 디렉토리 구분
+	uint64_t is_dir;					
 };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -310,4 +313,10 @@ inode_allow_write (struct inode *inode) {
 off_t
 inode_length (const struct inode *inode) {
 	return inode->data.length;
+}
+
+
+// inode가 directory인지 판단
+bool inode_is_dir(struct inode *inode){
+	return inode->data.is_dir;
 }

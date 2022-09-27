@@ -121,6 +121,9 @@ struct thread {
 	/* project 3 stack growth */
 	uintptr_t rsp;
 
+	/* project 4 subdirectory */
+	struct dir *cur_dir;
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */

@@ -1,0 +1,120 @@
+Script started on 2022-09-27 20:06:21+0000
+]0;ubuntu@ip-172-31-46-216: ~/pintos34-team08[01;32mubuntu@ip-172-31-46-216[00m:[01;34m~/pintos34-team08[00m$ git branch
+[?1h=  Lee3[m[m
+  debug_hyewon[m[m
+  debugging[m[m
+  dibugging_hyewon[m[m
+  han[m[m
+  hyewon[m[m
+  hyewon2[m[m
+  hyewon3[m[m
+  hyewon5[m[m
+  hyewon_VM[m[m
+* [32mhyewon_file[m[m
+  master[m[m
+  real_hyewon[m[m
+[K[?1l>]0;ubuntu@ip-172-31-46-216: ~/pintos34-team08[01;32mubuntu@ip-172-31-46-216[00m:[01;34m~/pintos34-team08[00m$ git status
+On branch hyewon_file
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git checkout -- <file>..." to discard changes in working directory)
+
+	[31mmodified:   filesys/directory.c[m
+	[31mmodified:   filesys/fat.c[m
+	[31mmodified:   filesys/inode.c[m
+	[31mmodified:   include/filesys/directory.h[m
+	[31mmodified:   include/threads/thread.h[m
+	[31mmodified:   userprog/syscall.c[m
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+
+	[31mterminal_backup.txt[m
+	[31mterminal_log.txt[m
+	[31muserprog/syscall copy.c[m
+
+no changes added to commit (use "git add" and/or "git commit -a")
+]0;ubuntu@ip-172-31-46-216: ~/pintos34-team08[01;32mubuntu@ip-172-31-46-216[00m:[01;34m~/pintos34-team08[00m$ git add .
+]0;ubuntu@ip-172-31-46-216: ~/pintos34-team08[01;32mubuntu@ip-172-31-46-216[00m:[01;34m~/pintos34-team08[00m$ git commit -m "092 8_[K[K[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[K
+[K[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[K[Kaws [A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[K
+[K[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[K[K[K"092 8_hyewon_fie[Klebhyewon_file[C[C[Crhyewon_file[C[C[C[Cahyewon_file[C[C[C[C[Cnhyewon_file[C[C[C[C[C[Cchyewon_file[C[C[C[C[C[C[C[Chyewon_file[C[C[C[C[C[C[C[C hyewon_file[C[C[C[C[C[C[C[C[Cbhyewon_fileahyewon_filechyewon_filekhyewon_fileuhyewon_filephyewon_file hyewon_file[hyewon_file[C[C[C[C[C[C[C[C[C[C[C]"[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[K
+[K[A[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[C[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[K[Kg[Krm terminal_log.tx t
+]0;ubuntu@ip-172-31-46-216: ~/pintos34-team08[01;32mubuntu@ip-172-31-46-216[00m:[01;34m~/pintos34-team08[00m$ ls
+LICENSE            Makefile12.kernel  [0m[01;34mlib[0m
+Make.config        README.md          terminal_backup.txt
+Makefile           [01;32mactivate[0m           [01;34mtests[0m
+Makefile.build     [01;34mdevices[0m            [01;34mthreads[0m
+Makefile.kernel    [01;34mfilesys[0m            [01;34muserprog[0m
+Makefile.userprog  [01;34minclude[0m            [01;34mutils[0m
+Makefile12.build   [01;32minstall.sh[0m         [01;34mvm[0m
+]0;ubuntu@ip-172-31-46-216: ~/pintos34-team08[01;32mubuntu@ip-172-31-46-216[00m:[01;34m~/pintos34-team08[00m$ git status
+On branch hyewon_file
+Changes to be committed:
+  (use "git reset HEAD <file>..." to unstage)
+
+	[32mmodified:   filesys/directory.c[m
+	[32mmodified:   filesys/fat.c[m
+	[32mmodified:   filesys/inode.c[m
+	[32mmodified:   include/filesys/directory.h[m
+	[32mmodified:   include/threads/thread.h[m
+	[32mnew file:   terminal_backup.txt[m
+	[32mnew file:   terminal_log.txt[m
+	[32mnew file:   userprog/syscall copy.c[m
+	[32mmodified:   userprog/syscall.c[m
+
+Changes not staged for commit:
+  (use "git add/rm <file>..." to update what will be committed)
+  (use "git checkout -- <file>..." to discard changes in working directory)
+
+	[31mmodified:   terminal_backup.txt[m
+	[31mdeleted:    terminal_log.txt[m
+
+]0;ubuntu@ip-172-31-46-216: ~/pintos34-team08[01;32mubuntu@ip-172-31-46-216[00m:[01;34m~/pintos34-team08[00m$ git status
+On branch hyewon_file
+Changes to be committed:
+  (use "git reset HEAD <file>..." to unstage)
+
+	[32mmodified:   filesys/directory.c[m
+	[32mmodified:   filesys/fat.c[m
+	[32mmodified:   filesys/inode.c[m
+	[32mmodified:   include/filesys/directory.h[m
+	[32mmodified:   include/threads/thread.h[m
+	[32mnew file:   terminal_backup.txt[m
+	[32mnew file:   terminal_log.txt[m
+	[32mnew file:   userprog/syscall copy.c[m
+	[32mmodified:   userprog/syscall.c[m
+
+Changes not staged for commit:
+  (use "git add/rm <file>..." to update what will be committed)
+  (use "git checkout -- <file>..." to discard changes in working directory)
+
+	[31mmodified:   terminal_backup.txt[m
+	[31mdeleted:    terminal_log.txt[m
+
+]0;ubuntu@ip-172-31-46-216: ~/pintos34-team08[01;32mubuntu@ip-172-31-46-216[00m:[01;34m~/pintos34-team08[00m$ git reset HEAD ter minal_log.txt
+Unstaged changes after reset:
+M	terminal_backup.txt
+]0;ubuntu@ip-172-31-46-216: ~/pintos34-team08[01;32mubuntu@ip-172-31-46-216[00m:[01;34m~/pintos34-team08[00m$ git status
+On branch hyewon_file
+Changes to be committed:
+  (use "git reset HEAD <file>..." to unstage)
+
+	[32mmodified:   filesys/directory.c[m
+	[32mmodified:   filesys/fat.c[m
+	[32mmodified:   filesys/inode.c[m
+	[32mmodified:   include/filesys/directory.h[m
+	[32mmodified:   include/threads/thread.h[m
+	[32mnew file:   terminal_backup.txt[m
+	[32mnew file:   userprog/syscall copy.c[m
+	[32mmodified:   userprog/syscall.c[m
+
+Changes not staged for commit:
+  (use "git add <file>..." to update what will be committed)
+  (use "git checkout -- <file>..." to discard changes in working directory)
+
+	[31mmodified:   terminal_backup.txt[m
+
+]0;ubuntu@ip-172-31-46-216: ~/pintos34-team08[01;32mubuntu@ip-172-31-46-216[00m:[01;34m~/pintos34-team08[00m$ got [K[K[Kit [K[K[K[Ks[Kexit[Kd[Kt
+exit
+
+Script done on 2022-09-27 20:14:33+0000
